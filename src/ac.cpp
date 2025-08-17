@@ -6,7 +6,7 @@
 volatile uint8_t ocFault = 0;
 static volatile uint8_t ac_armed = 0;
 
-static const uint16_t OC_BLANK_COUNTS = 8;
+static const uint16_t OC_BLANK_COUNTS = 20;
 
 static uint64_t ac_arm_deadline_us = 0;
 
