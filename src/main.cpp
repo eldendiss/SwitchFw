@@ -21,12 +21,17 @@ static inline float volts_from_counts(uint16_t c) {
 #define FB_OV_TRIP_CNT  (counts_from_volts(VOUT_OV_TRIP_V))
 #define FB_OV_CLR_CNT   (counts_from_volts(VOUT_OV_CLEAR_V))
 
-// ========= LEDs / Blink =========
+// ========= LEDs =========
 #define LED_OK    PC3
 #define LED_FAULT PC2
-#define OK_BLINK_US      1000000ull   // 1000 ms
-#define OV_FLT_BLINK_US  50000ull     // 50 ms
-#define OC_FLT_BLINK_US  200000ull    // 200 ms
+
+// Fault LED pattern timings (microseconds)
+#define LED_BLINK_ON_US     120000u   // length of each short blink
+#define LED_BLINK_OFF_US    120000u   // gap between short blinks
+#define LED_BLINK_PAUSE_US  600000u   // pause after the group
+
+static inline void led_ok_set(bool on)    { if (on) PORTC |= _BV(LED_OK);   else PORTC &= ~_BV(LED_OK); }
+static inline void led_fault_set(bool on) { if (on) PORTC |= _BV(LED_FAULT); else PORTC &= ~_BV(LED_FAULT); }
 
 // ========= Control Tuning =========
 #define CONTROL_PERIOD_US   1000u  // 1 kHz control
@@ -43,7 +48,7 @@ static inline float volts_from_counts(uint16_t c) {
 #define DUTY_STEP_MAX  0.0008f
 #define DUTY_ABS_MAX   0.20f
 #define DUTY_RAMP_CAP  0.12f
-#define DUTY_POST_CAP  0.16f   // was 0.10f; give more headroom after ramp
+#define DUTY_POST_CAP  0.16f   // more headroom after ramp
 
 #define ERR_DEADBAND_CNT  counts_from_volts(1.5f)
 #define I_LEAK_FACTOR     0.9995f
@@ -51,7 +56,7 @@ static inline float volts_from_counts(uint16_t c) {
 // ====== Burst/skip (enabled only AFTER ramp) ======
 #define BURST_HI_V        0.5f    // stop when FB >= set + 0.5 V
 #define BURST_LO_V        1.2f    // resume when FB <= set − 1.2 V
-#define BURST_MIN_OFF_MS  10u     // shorter off-time to reduce ripple
+#define BURST_MIN_OFF_MS  10u     // min off-time to reduce ripple
 
 // ========= State =========
 static uint32_t lastCtrlUs = 0;
@@ -67,12 +72,13 @@ static uint8_t d_inited = 0;
 static bool     burst_skip   = false;
 static uint16_t burst_off_ms = 0;
 
-static bool ovFault = true;
+static bool ovFault = true;          // OV latch
 
-static uint64_t lastOkBlinkUs  = 0;
-static uint64_t lastErrBlinkUs = 0;
 static uint32_t fbFilt = 0;          // EMA filtered FB (counts)
 static uint8_t  fbFilt_inited = 0;
+
+// ---- OC latch for LED pattern ----
+static uint16_t oc_latch_ms = 0;     // keep OC visible for some time
 
 typedef enum { PH_PRECHARGE, PH_PI } phase_t;
 static phase_t phase = PH_PRECHARGE;
@@ -89,6 +95,57 @@ static inline void setDutySlew(float target, float stepMax) {
     if (delta < -stepMax) delta = -stepMax;
     duty += delta;
     setDuty(duty);
+}
+
+// ========= Fault LED pattern engine =========
+// Codes: 0 = off, 2 = OV (two blinks), 3 = OC (three blinks). Priority OC > OV.
+static void run_fault_led(uint32_t now_us, uint8_t code) {
+    static uint8_t cur_code = 0;
+    static uint8_t blinks_left = 0;
+    static enum { IDLE, ON_SEG, OFF_SEG, PAUSE_SEG } st = IDLE;
+    static uint32_t t0 = 0;
+
+    if (code != cur_code) { // reset on code change
+        cur_code = code;
+        st = (code == 0) ? IDLE : ON_SEG;
+        blinks_left = code;
+        t0 = now_us;
+        led_fault_set(code ? true : false);
+        if (!code) led_fault_set(false);
+        return;
+    }
+    if (code == 0) { led_fault_set(false); return; }
+
+    switch (st) {
+        case ON_SEG:
+            if ((uint32_t)(now_us - t0) >= LED_BLINK_ON_US) {
+                led_fault_set(false);
+                t0 = now_us;
+                st = OFF_SEG;
+            }
+            break;
+        case OFF_SEG:
+            if ((uint32_t)(now_us - t0) >= LED_BLINK_OFF_US) {
+                if (--blinks_left > 0) {
+                    led_fault_set(true);
+                    t0 = now_us;
+                    st = ON_SEG;
+                } else {
+                    t0 = now_us;
+                    st = PAUSE_SEG;
+                }
+            }
+            break;
+        case PAUSE_SEG:
+            if ((uint32_t)(now_us - t0) >= LED_BLINK_PAUSE_US) {
+                blinks_left = code;
+                led_fault_set(true);
+                t0 = now_us;
+                st = ON_SEG;
+            }
+            break;
+        default: st = IDLE; led_fault_set(false); break;
+    }
 }
 
 // ========= Setup =========
@@ -122,7 +179,7 @@ void loop() {
 
     acService(now);
 
-    // --- FB read + EMA (alpha = 1/8 applied twice) ---
+    // --- FB read + EMA ---
     uint16_t fb_raw = getFB();
     if (!fbFilt_inited) { fbFilt = fb_raw; fbFilt_inited = 1; }
     fbFilt += ((int32_t)fb_raw - (int32_t)fbFilt) >> 3;
@@ -133,11 +190,9 @@ void loop() {
     if (fb > FB_OV_TRIP_CNT) ovFault = true;
     if (ovFault && fb < FB_OV_CLR_CNT) ovFault = false;
 
-    // --- Immediate OV action ---
-    if (ovFault) {
-        disablePwmOutput();
-        duty = 0.0f; integ = 0.0f; setDuty(0.0f);
-    }
+    // Track OC (short events) for LED pattern
+    if (getOcFault()) oc_latch_ms = 1500;               // hold 1.5 s
+    else if (oc_latch_ms) --oc_latch_ms;                // 1 ms per control tick (below)
 
     // --- Control @ 1 kHz ---
     if ((uint32_t)(now - lastCtrlUs) >= CONTROL_PERIOD_US) {
@@ -254,21 +309,17 @@ void loop() {
         }
     }
 
-    // --- LEDs (non-blocking) ---
-    if (getOcFault()) {
-        if ((uint32_t)(now - lastErrBlinkUs) >= OC_FLT_BLINK_US) {
-            PORTC ^= _BV(LED_OK);
-            lastErrBlinkUs = now;
-        }
-    } else if (ovFault) {
-        if ((uint32_t)(now - lastErrBlinkUs) >= OV_FLT_BLINK_US) {
-            PORTC ^= _BV(LED_OK);
-            lastErrBlinkUs = now;
-        }
+    // ========= LED policy =========
+    // OK LED: ON while in burst/hold, OFF otherwise (never on during faults)
+    if (ovFault || oc_latch_ms) {
+        led_ok_set(false);
     } else {
-        if ((uint32_t)(now - lastOkBlinkUs) >= OK_BLINK_US) {
-            PORTC ^= _BV(LED_FAULT);
-            lastOkBlinkUs = now;
-        }
+        led_ok_set(burst_skip);  // illuminate only in burst mode
     }
+
+    // FAULT LED: blink codes (OC=3 blinks > OV=2 blinks)
+    uint8_t code = 0;
+    if (oc_latch_ms) code = 3;
+    else if (ovFault) code = 2;
+    run_fault_led(now, code);
 }
