@@ -23,8 +23,12 @@ void config_defaults(AppConfig& cfg){
 
   cfg.ctrl.err_deadband_cnt= counts_from_volts(1.5f);
 
-  cfg.ctrl.pfm_enter_sub_cnt = counts_from_volts(12.0f);
   cfg.ctrl.pfm_lo_sub_cnt = counts_from_volts(10.0f);
+
+  cfg.ctrl.pfm_enter_sub_cnt = counts_from_volts(15.0f);
+  cfg.ctrl.pfm_burst_ms = 2;
+  cfg.ctrl.pfm_burst_duty = 0.02f;
+  cfg.ctrl.pfm_min_off_ms = 300;
 }
 
 bool config_load(AppConfig& cfg){

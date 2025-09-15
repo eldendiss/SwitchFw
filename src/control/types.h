@@ -31,6 +31,8 @@ struct ControlParams {
   uint16_t pfm_min_off_ms;       // min off time after a pulse
   uint16_t pfm_lo_sub_cnt;       // fire when fb <= fb_set - this
   uint16_t pfm_enter_sub_cnt;
+  uint16_t pfm_burst_ms;       // microburst length in ms (e.g., 2–4)
+  float    pfm_burst_duty;     // duty during microburst (e.g., 0.03f)
 };
 
 typedef enum { PH_PRECHARGE, PH_PI } phase_t;
@@ -59,4 +61,5 @@ struct ControlState {
   phase_t   phase;
   regmode_t mode;                // PWM or PFM
   uint16_t  pfm_cool_ms;         // cooldown counter (ms)
+  uint16_t pfm_mb_ms_left;
 };

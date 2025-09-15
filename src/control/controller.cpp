@@ -1,4 +1,3 @@
-// control/controller.cpp
 #include <math.h>
 #include "controller.h"
 #include "drivers/pwm.h"
@@ -32,12 +31,18 @@ void controller_init_defaults(ControlParams &c)
   // deadband
   c.err_deadband_cnt = 0;
 
-  // PFM hysteretic hold (set exact thresholds in cfg)
+  // PFM (microburst) hold — set exact counts in cfg
   c.pfm_enable        = 1;
-  c.pfm_ton_us        = 1;      // 1.5–3 us typical
-  c.pfm_min_off_ms    = 300;     // 60–120 ms
-  c.pfm_lo_sub_cnt    = 0;      // counts_from_volts(~3–5 V) in cfg
-  c.pfm_enter_sub_cnt = 0;      // counts_from_volts(~5 V) in cfg
+  c.pfm_min_off_ms    = 300;     // long cooldown = very low average pps
+  c.pfm_lo_sub_cnt    = 0;       // e.g., counts_from_volts(8–12 V) in cfg
+  c.pfm_enter_sub_cnt = 0;       // e.g., counts_from_volts(12–15 V) in cfg
+
+  // microburst shape (inaudible)
+  c.pfm_burst_ms      = 3;       // 2–4 ms of 31.25 kHz PWM
+  c.pfm_burst_duty    = 0.03f;   // ~3% duty during microburst (cap still applies)
+
+  // oneshot fields kept for compatibility (unused here)
+  c.pfm_ton_us        = 0;
 }
 
 void controller_reset(ControlState &s, uint32_t now_us)
@@ -53,10 +58,11 @@ void controller_reset(ControlState &s, uint32_t now_us)
   s.d_filt  = 0.0f;
   s.d_inited = 0;
 
-  s.burst_skip   = 0;
-  s.burst_off_ms = 0;
+  s.burst_skip     = 0;
+  s.burst_off_ms   = 0;     // re-used as PFM cooldown
+  s.pfm_mb_ms_left = 0;     // microburst time remaining
 
-  s.ov_fault   = 1;
+  s.ov_fault    = 1;
   s.oc_latch_ms = 0;
 
   s.fb_ema = 0;
@@ -93,7 +99,7 @@ void controller_step(uint32_t now,
   if (fb > c.fb_ov_trip_cnt) s.ov_fault = 1;
   if (s.ov_fault && fb < c.fb_ov_clear_cnt) s.ov_fault = 0;
 
-  // OC latch visibility (for LED/UI)
+  // OC latch visibility (LED/UI)
   if (oc_now) { s.oc_latch_ms = 1500; }
   else if (s.oc_latch_ms) { --s.oc_latch_ms; }
 
@@ -112,6 +118,7 @@ void controller_step(uint32_t now,
     s.d_filt  = 0.0f; s.d_inited = 0; s.fb_prev = fb;
     s.burst_skip = 0;
     s.burst_off_ms = 0;
+    s.pfm_mb_ms_left = 0;
     pwm_disable();
     dcounts_out = 0;
     return;
@@ -123,12 +130,12 @@ void controller_step(uint32_t now,
     return;
   }
 
-  // === Ramp setpoint ===
+  // === Ramp setpoint (for PWM path) ===
   if (s.ramp_ms < c.ramp_time_ms) ++s.ramp_ms;
   const float    ramp   = (float)s.ramp_ms / (float)c.ramp_time_ms;
   const uint16_t fb_set = (uint16_t)(c.fb_set_cnt * ramp + 0.5f);
 
-  // Duty ceilings (PWM path)
+  // Duty ceilings (PWM)
   float cap_soft = c.duty_ramp_cap * ramp;
   if (cap_soft > c.duty_ramp_cap) cap_soft = c.duty_ramp_cap;
   float cap = (cap_soft < c.duty_abs_max) ? cap_soft : c.duty_abs_max;
@@ -140,48 +147,76 @@ void controller_step(uint32_t now,
   else             { d_raw = s.fb_prev - (int32_t)fb; s.fb_prev = fb; }
   dcounts_out = (int16_t)d_raw;
 
-  // === Arm PFM only when NEAR the final setpoint (not just when time is up) ===
+  // === Decide if PFM (microburst) is allowed ===
   const bool ramp_done = (s.ramp_ms >= c.ramp_time_ms);
   const uint16_t pfm_enter_th =
       (c.fb_set_cnt > c.pfm_enter_sub_cnt) ? (uint16_t)(c.fb_set_cnt - c.pfm_enter_sub_cnt) : 0;
   const bool allow_pfm = c.pfm_enable && ramp_done && (fb >= pfm_enter_th);
 
-  // === PFM hysteretic hold ===
+  // === PFM microburst hold (silent) ===
   if (allow_pfm) {
-    // mark holding for LEDs
-    s.burst_skip = 1;
+    s.burst_skip = 1; // for LED
 
-    // ensure continuous PWM is OFF in PFM
-    if (pwm_is_enabled()) pwm_disable();
+    // Cooldown between microbursts
+    if (s.pfm_mb_ms_left == 0) {
+      if (s.burst_off_ms > 0) { --s.burst_off_ms; pwm_disable(); return; }
 
-    // cooldown (ms)
-    if (s.burst_off_ms > 0) { --s.burst_off_ms; return; }
-
-    // low threshold around the FINAL setpoint (not ramped)
-    const uint16_t lo = (c.fb_set_cnt > c.pfm_lo_sub_cnt)
+      // Use FINAL setpoint thresholds (not ramped)
+      const uint16_t lo = (c.fb_set_cnt > c.pfm_lo_sub_cnt)
                           ? (uint16_t)(c.fb_set_cnt - c.pfm_lo_sub_cnt) : 0;
 
-    if (fb <= lo) {
-      // one fixed-width pulse; driver auto-detaches after COMPA
-      pwm_emit_oneshot_us(c.pfm_ton_us);
+      // Start a microburst only if low
+      if (fb <= lo) {
+        s.pfm_mb_ms_left = c.pfm_burst_ms;          // e.g., 2–4 ms
+        // Prepare PWM with small duty, bottom-synced
+        float dcmd = c.pfm_burst_duty;
+        float capb = c.duty_post_cap;                // keep ≤12%
+        if (dcmd > capb) dcmd = capb;
+        dcmd = quant(dcmd);
+        if (dcmd < 2.0f * DLSB) dcmd = 2.0f * DLSB;  // ensure switching
+        s.duty = dcmd;
+        pwm_set_duty(s.duty);
+        pwm_enable_sync_bottom();
+      } else {
+        pwm_disable();
+        return;
+      }
+    }
 
-      // jittered cooldown to avoid tonal ticks (±~20% of min_off)
-      static uint8_t lfsr = 0xA5;
-      lfsr = (uint8_t)((lfsr >> 1) ^ (-(lfsr & 1u) & 0xB8u));
-      int8_t jitter = (int8_t)(lfsr & 0x1F) - 16;         // -16..+15
-      int32_t off = (int32_t)c.pfm_min_off_ms + jitter;   // ms
-      if (off < 20) off = 20;                             // floor
-      s.burst_off_ms = (uint16_t)off;
+    // Run microburst window at 31.25 kHz, small duty
+    if (s.pfm_mb_ms_left > 0) {
+      --s.pfm_mb_ms_left;
+
+      // (Optional small slew toward target to avoid sudden step)
+      float target = quant(c.pfm_burst_duty);
+      if (target > c.duty_post_cap) target = c.duty_post_cap;
+      if (target < 2.0f * DLSB)     target = 2.0f * DLSB;
+
+      float du   = target - s.duty;
+      float step = (c.duty_step_max < DLSB) ? DLSB : c.duty_step_max;
+      if (du >  step) du =  step;
+      if (du < -step) du = -step;
+      s.duty += du; pwm_set_duty(s.duty);
+
+      if (s.pfm_mb_ms_left == 0) {
+        // End of microburst → gate low and start jittered cooldown
+        pwm_disable();
+        static uint8_t lfsr = 0xA5;
+        lfsr = (uint8_t)((lfsr >> 1) ^ (-(lfsr & 1u) & 0xB8u));
+        int8_t jitter = (int8_t)(lfsr & 0x1F) - 16;         // -16..+15 (~±20%)
+        int32_t off = (int32_t)c.pfm_min_off_ms + jitter;
+        if (off < 20) off = 20;
+        s.burst_off_ms = (uint16_t)off;
+      }
     }
     return;
   }
 
   // === PWM path (ramp/PI) ===
-  s.burst_skip = 0; // not holding
+  s.burst_skip = 0;
 
-  // Ensure PWM attached before commanding duty
   if (!pwm_is_enabled()) {
-    float pre = 2.0f * DLSB;               // guarantee switching
+    float pre = 2.0f * DLSB;
     if (s.duty < pre) s.duty = pre;
     pwm_set_duty(s.duty);
     pwm_enable_sync_bottom();
