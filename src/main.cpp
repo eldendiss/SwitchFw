@@ -15,12 +15,41 @@
 #include "cfg/config.h"
 #include "comm/i2c_proto.h"
 
-// Shared with comparator ISR
-extern volatile uint8_t g_allow_switch;
+/**
+ * \file
+ * \brief Firmware entry points: hardware bring-up, main control loop, and UI.
+ * \details
+ * Responsibilities:
+ * - Enforce safe gate state on boot; set CPU prescaler via \c clock_set_div().
+ * - Init low-level drivers (PWM, ADC, comparator, timebase) and range IO.
+ * - Load configuration (EEPROM with wear leveling) and reset controller state.
+ * - Bind and start the I²C slave (addr 0x2A) for config/status access.
+ * - Run the 1 kHz control loop, range switching state machine, and LEDs.
+ *
+ * LED policy (see \c drivers/status_led.*):
+ * - Fault LED encodes fault codes (OC/OV, etc.).
+ * - OK LED indicates run state (boot, wait EN, precharge, ramp, PFM hold, etc.).
+ */
 
+// Shared with comparator ISR
+extern volatile uint8_t g_allow_switch; //!< Allows PWM re-enable after OC in next period.
+
+/** \brief Global configuration blob (loaded from EEPROM or defaults). */
 static AppConfig g_cfg;
+/** \brief Runtime controller state (integrators, latches, EMA, etc.). */
 static ControlState g_state;
 
+/**
+ * \brief Arduino setup: put hardware in a safe state and initialize all subsystems.
+ * \details
+ * Steps:
+ * 1) Force gate LOW and detach OC1A.
+ * 2) Apply CPU prescaler (\c CPU_DIV_LOG2 → \c F_CPU_CFG).
+ * 3) Configure LEDs, EN input, range IO, and a board strap.
+ * 4) Initialize PWM/ADC/comparator/timebase (interrupt-safe).
+ * 5) Load configuration; reset controller timebase/phase.
+ * 6) Arm comparator after delay (AREF settle), then start I²C at 0x2A.
+ */
 void setup()
 {
   cli();
@@ -33,16 +62,12 @@ void setup()
   clock_set_div(CPU_DIV_LOG2);
 
   // LEDs
-  DDRC |= _BV(STATUS0) | _BV(STATUS1);
+  DDRC |= _BV(LED_OK) | _BV(LED_FAULT);
   led_init();
 
   // EN + ranges
   EN_init_input();
   range_init();
-
-  // Board strap
-  DDRB |= _BV(PB6);
-  PORTB |= _BV(PB6);
 
   _delay_ms(3000);
 
@@ -61,7 +86,7 @@ void setup()
   comp_arm_after_us(80000UL, us_now32());
   uint32_t t0 = us_now32();
   while (us_now32() - t0 < 100000UL)
-  {
+  { /* settle */
   }
 
   // I2C
@@ -70,6 +95,15 @@ void setup()
   (void)loaded;
 }
 
+/**
+ * \brief Main loop: gating, range handling, control step, and LED/UI updates.
+ * \details
+ * - EN gating: controller runs only if EN is active and range sequencer is idle.
+ * - External range inputs trigger a safe break→wait-stable→make sequence.
+ * - Controller executes 1 kHz steps with OV/OC handling and optional PFM hold.
+ * - OC sticky pulses extend the OC indicator for UI visibility.
+ * - LEDs reflect current run/fault states.
+ */
 void loop()
 {
   uint32_t now = us_now32();
@@ -79,13 +113,24 @@ void loop()
   g_allow_switch = allow;
   comp_service(now);
 
-  // Range control based on external pins
-  static uint8_t last_range = 0xFF;
-  uint8_t rc = range_get_input_code();
-  if (rc != last_range)
-  {
-    range_request(rc);
-    last_range = rc;
+  // I2C-requested range changes
+  uint8_t req;
+  if (i2c_take_range_request(&req)) {
+    // only start a new switch when not already switching
+    if (!range_is_busy()) {
+      range_request(req);
+    }
+  }
+
+  // Track when the physical relay actually made, then apply the table->active setpoint
+  static uint8_t last_made = 0xFF;
+  uint8_t made = range_get_current_code();
+  if (made != last_made) {
+    last_made = made;
+    if (made < 4) {
+      g_cfg.ctrl.fb_set_cnt = g_cfg.ctrl.fb_set_cnt_tab[made];
+      g_state.active_range = made; // if you added this to ControlState
+    }
   }
 
   // Controller step (only if enabled)
@@ -103,6 +148,7 @@ void loop()
     led_fault_run(now, F_NONE);
     return;
   }
+
   // OC latch reflection for LED
   uint8_t oc_now = comp_oc_fault();
   controller_step(now, g_cfg.ctrl, g_state, fb_raw, oc_now, allow, fb, dcounts);
