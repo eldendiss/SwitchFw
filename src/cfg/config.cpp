@@ -62,20 +62,18 @@ void config_defaults(AppConfig &cfg)
   controller_init_defaults(cfg.ctrl);
 
   cfg.ctrl.fb_set_cnt_tab[0] = counts_from_volts(200.0f);
-  cfg.ctrl.fb_ov_clear_cnt_tab[0] = counts_from_volts(200.0f + 30);
-  cfg.ctrl.fb_ov_trip_cnt_tab[0] = counts_from_volts(200.0f + 50);
-
   cfg.ctrl.fb_set_cnt_tab[1] = counts_from_volts(300.0f);
-  cfg.ctrl.fb_ov_clear_cnt_tab[1] = counts_from_volts(300.0f + 30);
-  cfg.ctrl.fb_ov_trip_cnt_tab[1] = counts_from_volts(300.0f + 50);
-
   cfg.ctrl.fb_set_cnt_tab[2] = counts_from_volts(400.0f);
-  cfg.ctrl.fb_ov_clear_cnt_tab[2] = counts_from_volts(400.0f + 30);
-  cfg.ctrl.fb_ov_trip_cnt_tab[2] = counts_from_volts(400.0f + 50);
-
   cfg.ctrl.fb_set_cnt_tab[3] = counts_from_volts(500.0f);
-  cfg.ctrl.fb_ov_clear_cnt_tab[3] = counts_from_volts(500.0f + 30);
-  cfg.ctrl.fb_ov_trip_cnt_tab[3] = counts_from_volts(500.0f + 50);
+
+  // Example per-range OV thresholds (adjust to your divider/safety)
+  for (int i = 0; i < 4; ++i)
+  {
+    // trip ~+8..10% above setpoint, clear ~+5% (just a placeholder policy)
+    uint16_t set = cfg.ctrl.fb_set_cnt_tab[i];
+    cfg.ctrl.fb_ov_trip_cnt_tab[i] = (uint16_t)((float)set * 1.10f + 0.5f);
+    cfg.ctrl.fb_ov_clear_cnt_tab[i] = (uint16_t)((float)set * 1.05f + 0.5f);
+  }
 
   cfg.ctrl.fb_set_cnt = cfg.ctrl.fb_set_cnt_tab[0];
   cfg.ctrl.fb_ov_trip_cnt = cfg.ctrl.fb_ov_trip_cnt_tab[0];

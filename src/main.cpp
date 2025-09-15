@@ -39,6 +39,12 @@ static AppConfig g_cfg;
 /** \brief Runtime controller state (integrators, latches, EMA, etc.). */
 static ControlState g_state;
 
+extern uint8_t i2c_get_range_src();
+extern void i2c_set_range_src(uint8_t src);
+
+static uint32_t last_i2c_select_us = 0;
+static const uint32_t I2C_HOLD_US = 0; // set to e.g. 30*1000000 for AUTO fallback after 30 s
+
 /**
  * \brief Arduino setup: put hardware in a safe state and initialize all subsystems.
  * \details
@@ -108,64 +114,122 @@ void loop()
 {
   uint32_t now = us_now32();
 
-  // EN gating
+  // --- arbitration state (persist across calls) ---
+  static uint32_t last_i2c_select_us = 0;
+  static uint8_t last_hw_code = 0xFF;
+  static uint8_t last_made = 0xFF;
+  const uint32_t I2C_HOLD_US = 0; // >0 to AUTO-fallback to HW after idle; 0 = disabled
+
+  // ---- source selection: HW vs I2C (0x21) ----
+  uint8_t src = i2c_get_range_src();
+
+  // I2C range requests (only if not forced-HW)
+  uint8_t req;
+  if ((src != RANGE_SRC_HW) && i2c_take_range_request(&req))
+  {
+    last_i2c_select_us = now;
+    if (!range_is_busy())
+      range_request((uint8_t)(req & 0x03));
+    if (src == RANGE_SRC_AUTO)
+      i2c_set_range_src(RANGE_SRC_I2C); // I²C takes over
+  }
+
+  // Optional AUTO fallback to HW after inactivity
+  if (src == RANGE_SRC_AUTO && I2C_HOLD_US > 0)
+  {
+    if ((int32_t)(now - last_i2c_select_us) >= (int32_t)I2C_HOLD_US)
+    {
+      i2c_set_range_src(RANGE_SRC_HW);
+      src = RANGE_SRC_HW;
+    }
+  }
+
+  // HW pins drive range only in HW mode
+  if (src == RANGE_SRC_HW)
+  {
+    uint8_t hw = range_get_input_code();
+    if (hw != last_hw_code && !range_is_busy())
+    {
+      range_request((uint8_t)(hw & 0x03));
+      last_hw_code = hw;
+    }
+  }
+
+  // ---- EN gating computed AFTER arbitration ----
   bool allow = EN_is_active() && !range_is_busy();
   g_allow_switch = allow;
   comp_service(now);
 
-  // I2C-requested range changes
-  uint8_t req;
-  if (i2c_take_range_request(&req)) {
-    // only start a new switch when not already switching
-    if (!range_is_busy()) {
-      range_request(req);
-    }
-  }
-
-  // Track when the physical relay actually made, then apply the table->active setpoint
-  static uint8_t last_made = 0xFF;
-  uint8_t made = range_get_current_code();
-  if (made != last_made) {
-    last_made = made;
-    if (made < 4) {
-      g_cfg.ctrl.fb_set_cnt = g_cfg.ctrl.fb_set_cnt_tab[made];
-      g_state.active_range = made; // if you added this to ControlState
-    }
-  }
-
-  // Controller step (only if enabled)
-  uint16_t fb;
-  int16_t dcounts;
+  // Controller inputs
   uint16_t fb_raw = adc_fb_decim();
-  FaultCode fcode = F_NONE;
-  RunState rstate = S_WAIT_EN;
 
   if (!allow)
   {
+    // Keep gate off but continue the range FSM
     pwm_disable();
     pwm_set_duty(0.0f);
+    range_service(now, fb_raw, 0);
+
+    // Apply per-range ACTIVE profile when relay makes
+    uint8_t made = range_get_current_code();
+    if (made != last_made && made < 4)
+    {
+      last_made = made;
+      g_cfg.ctrl.fb_set_cnt = g_cfg.ctrl.fb_set_cnt_tab[made];
+      g_cfg.ctrl.fb_ov_trip_cnt = g_cfg.ctrl.fb_ov_trip_cnt_tab[made];
+      g_cfg.ctrl.fb_ov_clear_cnt = g_cfg.ctrl.fb_ov_clear_cnt_tab[made];
+      g_state.active_range = made;
+
+      // gentle re-entry
+      g_state.ramp_ms = 0;
+      g_state.pre_ms = 0;
+      g_state.phase = PH_PRECHARGE;
+    }
+
     led_status_run(now, range_is_busy() ? S_RANGE_SWITCH : S_WAIT_EN);
     led_fault_run(now, F_NONE);
     return;
   }
 
-  // OC latch reflection for LED
+  // ---- Normal control path ----
+  uint16_t fb;
+  int16_t dcounts;
   uint8_t oc_now = comp_oc_fault();
   controller_step(now, g_cfg.ctrl, g_state, fb_raw, oc_now, allow, fb, dcounts);
 
-  uint8_t oc_event = comp_oc_pulse_sticky(); // use sticky
+  uint8_t oc_event = comp_oc_pulse_sticky();
   if (oc_event)
-    g_state.oc_latch_ms = 1500; // LED will always show OC click
+    g_state.oc_latch_ms = 1500;
 
-  // Range service uses derivative to decide “stable”
+  // Advance range FSM with real derivative (stability check meaningful)
   range_service(now, fb, dcounts);
 
-  // Select LED state
+  // Apply per-range ACTIVE profile when relay makes
+  uint8_t made = range_get_current_code();
+  if (made != last_made && made < 4)
+  {
+    last_made = made;
+    g_cfg.ctrl.fb_set_cnt = g_cfg.ctrl.fb_set_cnt_tab[made];
+    g_cfg.ctrl.fb_ov_trip_cnt = g_cfg.ctrl.fb_ov_trip_cnt_tab[made];
+    g_cfg.ctrl.fb_ov_clear_cnt = g_cfg.ctrl.fb_ov_clear_cnt_tab[made];
+    g_state.active_range = made;
+
+    // restart gently after relay change
+    g_state.ramp_ms = 0;
+    g_state.pre_ms = 0;
+    g_state.phase = PH_PRECHARGE;
+    pwm_disable();
+  }
+
+  // ---- LEDs ----
+  FaultCode fcode = F_NONE;
+  RunState rstate = S_WAIT_EN;
+
   if (g_state.ov_fault)
   {
     fcode = F_OV;
     rstate = S_RAMP;
-  } // showing OV fault
+  }
   else if (g_state.oc_latch_ms)
   {
     fcode = F_OC;
@@ -188,7 +252,6 @@ void loop()
     rstate = S_RAMP;
   }
 
-  // LEDs
   led_status_run(now, rstate);
   led_fault_run(now, fcode);
 }
