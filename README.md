@@ -180,6 +180,9 @@ Configuration is stored in EEPROM with wear leveling:
 - **Programmer**: ISP programmer (USBasp, AVR Dragon, etc.)
 
 ## License
-See LICENSE file for details.
+This project is licensed under a **Non-Commercial License**.  
+- ✅ Free for personal, educational, and research use.  
+- ❌ Commercial use, redistribution for profit, or inclusion in commercial products is prohibited without written permission.  
+See [LICENSE](./LICENSE) for details.
 
 ⚠️ WARNING: This device generates potentially lethal high voltages. Only qualified personnel should operate, maintain, or modify this equipment. Always follow proper safety procedures when working with high-voltage systems.

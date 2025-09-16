@@ -1,14 +1,16 @@
 # Flyback PSU & Geiger Counter ESP-IDF Driver
 
-This repository provides ESP-IDF drivers and example code for interfacing with an AVR flyback power supply unit (PSU) and a Geiger counter pulse detector using the ESP32's RMT peripheral.
+ESP-IDF drivers for:
+- an **AVR flyback HV PSU** (I²C, 4 ranges, status/commands), and
+- a **Geiger pulse counter** using the ESP32 RMT RX peripheral.
 
----
+Works on ESP-IDF v5+.
 
 ## Overview
 
-- **Flyback PSU driver**: Communicates with the AVR flyback PSU over I²C to configure voltage ranges, setpoints, thresholds, and read status.
-- **Geiger counter driver**: Uses the ESP32 RMT RX peripheral to count pulses from a Geiger tube, providing counts per second (CPS) and counts per minute (CPM).
-- **Example application**: Demonstrates how to initialize and use both drivers together, cycling through PSU voltage ranges and logging Geiger counts.
+- **Flyback PSU driver (`flyback_psu`)**: Configure per-range setpoints/OV thresholds, select ranges (HW/I²C/AUTO), read 8-byte status, and issue SAVE/RESET commands. Counts↔volts helpers included.
+- **Geiger counter driver (`geiger_counter`**: Counts tube pulses with RMT RX. Filters glitches by minimum pulse width. Provides **CPS, CPM (rolling 60 s)**, and **total**. Thread-safe getters.
+- **Example application (`main`)**: Demonstrates how to initialize and use both drivers together, cycling through PSU voltage ranges and logging Geiger counts.
 
 ---
 
@@ -16,28 +18,28 @@ This repository provides ESP-IDF drivers and example code for interfacing with a
 
 ### Flyback PSU
 
-- Initialize I²C master and communicate with PSU device.
-- Set per-range voltage setpoints and overvoltage trip/clear thresholds.
-- Select active voltage range (0..3) via I²C.
-- Read compact status including feedback voltage, fault codes, and range switching state.
-- Send commands to save configuration or reset controller.
-- Convert between volts and internal counts with configurable full-scale voltage.
+- I²C master init/reuse, configurable clock.
+- Range source control: HW / I²C / AUTO.
+- Program per-range set, OV trip, OV clear (counts or volts).
+- Read compact STATUS: run_state, fault_code, fb_counts, dcounts, active_range, busy.
+- SAVE_CONFIG, RESET_CTRL commands.
+- Helpers: volts↔counts, set profiles, wait-until-idle.
 
 ### Geiger Counter
 
-- Count pulses on a GPIO using ESP32 RMT RX peripheral.
-- Filter out glitches shorter than a configurable minimum pulse width.
-- Provide total pulse count, counts per second (CPS), and rolling counts per minute (CPM).
-- Thread-safe API with internal FreeRTOS task handling pulse processing.
+- RMT RX capture with **min pulse width** filter (ns).
+- Configurable **active level** (high/low), **resolution** (Hz), buffer size.
+- Thread-safe **get_total(), get_cps(), get_cpm()**.
+- Internal task processes RX buffers (zero-copy on symbols).
 
 ---
 
 ## Hardware Requirements
 
-- ESP32 development board with ESP-IDF v5 or later.
-- AVR flyback PSU connected via I²C (default address 0x2A).
-- Geiger tube connected to a GPIO pin capable of input capture.
-- Pull-up resistors on I²C lines (SDA, SCL) as required.
+- ESP32/ESP32-Sx/Cx with ESP-IDF v5+
+- I²C wiring to AVR PSU at 0x2A (pull-ups required)
+- Tube pulse output routed to an ESP32 GPIO
+- CMake build (component-based)
 
 ---
 
@@ -74,8 +76,8 @@ The example demonstrates:
 
 ```c
 flyback_psu_t psu;
-ESP_ERROR_CHECK(flyback_psu_init(&psu, I2C_NUM_0, SDA_GPIO, SCL_GPIO, 10000, 0x2A));
-flyback_psu_set_fullscale(&psu, 1077.5f);
+ESP_ERROR_CHECK(flyback_psu_init(&psu, I2C_NUM_0, SDA_GPIO, SCL_GPIO, 10000 /* 10 kHz */, 0x2A));
+flyback_psu_set_fullscale(&psu, 1077.5f); // 1023 counts == 1077.5 V
 ```
 
 #### Set Range Source to I²C
@@ -87,28 +89,31 @@ ESP_ERROR_CHECK(flyback_psu_set_range_source(&psu,  FLYBACK_RANGE_SRC_I2C));
 #### Set Voltage Setpoints (volts)
 
 ```c
-float voltages[4] = {200.0f, 500.0f, 700.0f, 900.0f};
-uint16_t counts[4];
-for (int i = 0; i < 4; ++i) {
-    counts[i] = flyback_psu_volts_to_counts(&psu, voltages[i]);
+const float V[4] = {200, 500, 700, 900};
+uint16_t C[4];
+for (int i=0;i<4;i++) C[i] = flyback_psu_volts_to_counts(&psu, V[i]);
+ESP_ERROR_CHECK(flyback_psu_set_table_counts4(&psu, C));
+
+// Trip/Clear @ +10% / +5%
+for (int i=0;i<4;i++){
+  ESP_ERROR_CHECK(flyback_psu_set_trip_counts(&psu,  i,
+     flyback_psu_volts_to_counts(&psu, V[i]*1.10f)));
+  ESP_ERROR_CHECK(flyback_psu_set_clear_counts(&psu, i,
+     flyback_psu_volts_to_counts(&psu, V[i]*1.05f)));
 }
-ESP_ERROR_CHECK(flyback_psu_set_table_counts4(&psu, counts));
+// Optional: ESP_ERROR_CHECK(flyback_psu_send_command(&psu, FLYBACK_CMD_SAVE_CONFIG));
 ```
 
-#### Set Overvoltage Trip and Clear Thresholds
-
+#### Start the Geiger counter
 ```c
-uint8_t trip_buf[8], clear_buf[8];
-for (int i = 0; i < 4; ++i) {
-    uint16_t trip = flyback_psu_volts_to_counts(&psu, voltages[i] * 1.10f);
-    uint16_t clear = flyback_psu_volts_to_counts(&psu, voltages[i] * 1.05f);
-    trip_buf[i*2] = trip & 0xFF;
-    trip_buf[i*2+1] = trip >> 8;
-    clear_buf[i*2] = clear & 0xFF;
-    clear_buf[i*2+1] = clear >> 8;
-}
-ESP_ERROR_CHECK(flyback_psu_write(&psu, REG_TRIP0, trip_buf, sizeof(trip_buf)));
-ESP_ERROR_CHECK(flyback_psu_write(&psu, REG_CLEAR0, clear_buf, sizeof(clear_buf)));
+geiger_counter_t gc = {0};
+ESP_ERROR_CHECK(geiger_counter_start(&gc,
+    GPIO_NUM_4,          // pulse input GPIO
+    true,                // active-high pulses
+    20000000,            // 20 MHz resolution (50 ns tick)
+    1000,                // ≥1 µs min pulse width
+    2048));              // RX symbol buffer
+
 ```
 
 #### Select Active Range
@@ -125,7 +130,15 @@ flyback_psu_status_t status;
 if (flyback_psu_read_status(&psu, &status) == ESP_OK) {
     float feedback_volts = flyback_psu_counts_to_volts(&psu, status.fb_counts);
     // Use status fields as needed
+    ESP_LOGI("PSU","st=%u fault=%u fb=%u(%.1fV) d=%d r=%u busy=%u",
+             s.run_state, s.fault_code, s.fb_counts, v, (int)s.dcounts,
+             s.active_range, s.range_busy);
 }
+ESP_LOGI("GEIGER","CPS=%.1f CPM=%.1f Total=%llu",
+           geiger_counter_get_cps(&gc),
+           geiger_counter_get_cpm(&gc),
+           (unsigned long long)geiger_counter_get_total(&gc));
+  vTaskDelay(pdMS_TO_TICKS(1000));
 ```
 
 ### Geiger Counter
@@ -157,15 +170,39 @@ I (1235) GEIGER: Counts: CPS=5.0  CPM=300.0  Total=1500
 ...
 ```
 
-## Notes
-- Adjust I²C bus speed and GPIO pins according to your hardware.
+## Notes & Best Practices
+- **I²C speed:** Start at **10 kHz** (robust on long harnesses). If wiring is short/clean, 100–400 kHz is fine.
+- **Range arbitration:**
+    - `AUTO`: hardware pins control until the first I²C request, then I²C takes over.
+    - If your front panel uses the HW pins, prefer AUTO so remote control can still take over.
+- **STATUS → volts:** `V ≈ fb_counts * (fullscale / 1023.0)`, default fullscale **1077.5 V**.
+- **RMT sizing:**
+    - `resolution_hz = 20 MHz` gives 50 ns ticks; good for 2–5 µs pulses.
+    - `min_pulse_ns`: start with 1000 ns (rejects narrow noise).
+    - `buf_symbols`: 1024–2048 typical; increase if you expect high CPM or bursts.
+- **Threading**:
+    - RMT RX runs a task; getters use a mutex; safe from multiple tasks.
+    - Avoid calling `geiger_counter_stop` from ISR context.
+
 - The Geiger counter uses a dedicated FreeRTOS task and RMT peripheral; ensure sufficient stack size and priority.
-- The flyback PSU driver assumes the AVR firmware uses little-endian multi-byte registers.
 - Use flyback_psu_send_command() to save configuration to EEPROM or reset the controller if needed.
 - The example cycles through all four voltage ranges, holding each for 60 seconds, printing status and counts every second.
 
+## Troubleshooting
+- **I²C timeouts**
+    - Check address `0x2A`, pull-ups, and grounds. Drop bus to **10 kHz** first.
+- **STATUS never idle (`busy=1`)**
+    - Mechanical relays need time; ensure `flyback_psu_wait_idle()` poll interval ≥ 10 ms and timeout ≥ 3 s.
+- **OV faults**
+    - Trip/clear thresholds too tight for the measured divider scaling. Re-measure HV and adjust counts.
+- **Few/no counts**
+    - Pulse polarity mismatch (`active_high`). Increase `min_pulse_ns` if noise, decrease if valid pulses are ~1–2 µs but get filtered.
+
 ## License
-See LICENSE file for details.
+This project is licensed under a **Non-Commercial License**.  
+- ✅ Free for personal, educational, and research use.  
+- ❌ Commercial use, redistribution for profit, or inclusion in commercial products is prohibited without written permission.  
+See [LICENSE](./LICENSE) for details.
 
 ## References
 - [ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/)
