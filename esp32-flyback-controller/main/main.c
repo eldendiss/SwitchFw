@@ -5,6 +5,7 @@
 #include "flyback_psu.h"
 #include "esp_timer.h"
 #include "geiger_counter.h"
+#include "driver/gpio.h"
 
 static const char *TAG = "example";
 
@@ -31,8 +32,14 @@ void app_main(void)
 {
   // I2C configuration: adjust pins and bus speed for your hardware
   const i2c_port_t port = I2C_NUM_0;
-  const gpio_num_t SDA = 21;
-  const gpio_num_t SCL = 22;
+  const gpio_num_t SDA = 22;
+  const gpio_num_t SCL = 21;
+  const gpio_num_t enablePin = GPIO_NUM_17;
+
+  //initialize enable pin
+  gpio_set_direction(enablePin, GPIO_MODE_OUTPUT);
+  gpio_set_level(enablePin, 1); // Enable PSU by setting pin HIGH
+
 
   // Initialize flyback PSU device context
   flyback_psu_t psu;
@@ -112,7 +119,8 @@ void app_main(void)
     flyback_psu_status_t s;
     if (flyback_psu_read_status(&psu, &s) == ESP_OK)
     {
-      float vfb = flyback_psu_counts_to_volts(&psu, s.fb_counts);
+      float vfb = flyback_ps
+      u_counts_to_volts(&psu, s.fb_counts);
       ESP_LOGI(TAG,
                "PSU status: state=%u fault=%u fb_counts=%u (~%.1f V) dcounts=%d active_range=%u busy=%u",
                s.run_state, s.fault_code, s.fb_counts, vfb, (int)s.dcounts,
