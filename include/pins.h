@@ -43,9 +43,9 @@
 #define RANGE1 PD5
 
 /** \brief Green OK LED on PORTC bit 2. */
-#define LED_OK PC2
+#define LED_OK PC3
 /** \brief Red FAULT LED on PORTC bit 3. */
-#define LED_FAULT PC3
+#define LED_FAULT PC2
 
 /** \brief Resistor-switch output 0 (divider control) on PORTB. */
 #define R_SW0 PB6
