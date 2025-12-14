@@ -61,7 +61,7 @@ void config_defaults(AppConfig &cfg)
 {
   controller_init_defaults(cfg.ctrl);
 
-  cfg.ctrl.fb_set_cnt_tab[0] = counts_from_volts(200.0f);
+  cfg.ctrl.fb_set_cnt_tab[0] = counts_from_volts(500.0f);
   cfg.ctrl.fb_set_cnt_tab[1] = counts_from_volts(300.0f);
   cfg.ctrl.fb_set_cnt_tab[2] = counts_from_volts(400.0f);
   cfg.ctrl.fb_set_cnt_tab[3] = counts_from_volts(500.0f);
