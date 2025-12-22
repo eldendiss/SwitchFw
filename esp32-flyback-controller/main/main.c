@@ -119,8 +119,7 @@ void app_main(void)
     flyback_psu_status_t s;
     if (flyback_psu_read_status(&psu, &s) == ESP_OK)
     {
-      float vfb = flyback_ps
-      u_counts_to_volts(&psu, s.fb_counts);
+      float vfb = flyback_psu_counts_to_volts(&psu, s.fb_counts);
       ESP_LOGI(TAG,
                "PSU status: state=%u fault=%u fb_counts=%u (~%.1f V) dcounts=%d active_range=%u busy=%u",
                s.run_state, s.fault_code, s.fb_counts, vfb, (int)s.dcounts,
