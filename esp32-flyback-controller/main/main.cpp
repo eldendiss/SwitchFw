@@ -6,11 +6,14 @@
 #include "esp_timer.h"
 #include "geiger_counter.h"
 #include "driver/gpio.h"
+#include "wifi.h"
+#include "storage.h"
+#include "iot_is.h"
+#include "job_manager.h"
+#include "ota.h"
+#include "sntp.h"
 
-static const char *TAG = "example";
-
-#define TUBE_GPIO GPIO_NUM_4  // GPIO pin connected to Geiger tube pulse output
-#define TUBE_ACTIVE_HIGH false // Set to false if pulses are active LOW
+static const char *TAG = "main";
 
 // Register base addresses for per-range overvoltage (OV) arrays (little-endian u16 x4)
 #define REG_TRIP0 0x0E  // fb_ov_trip_cnt_tab[0] register base
@@ -28,17 +31,67 @@ static inline void put_u16le(uint8_t *b, int off, uint16_t v)
   b[off + 1] = (uint8_t)(v >> 8);
 }
 
-void app_main(void)
+extern "C" void app_main(void)
 {
+  //initialize storage
+  storage_init();
+
+  //mark app as valid to avoid rollback
+  mark_app_valid_cancel_rollback();
+
+  //initialize wifi
+  wifi_init();
+
+  //try to get provisioning data
+  provisioning_data_t provData;
+  if (storage_load_provisioning_data(&provData) != ESP_OK)
+  {
+    ESP_LOGE(TAG, "Failed to load provisioning data from storage, using defaults");
+    memccpy(provData.ssid, CONFIG_RASENS_DEFAULT_SSID, 0, sizeof(provData.ssid));
+    memccpy(provData.password, CONFIG_RASENS_DEFAULT_WIFI_PASSWORD, 0, sizeof(provData.password));
+    memccpy(provData.mqtt_host, CONFIG_RASENS_MQTT_HOST, 0, sizeof(provData.mqtt_host));
+    provData.mqtt_port = CONFIG_RASENS_MQTT_PORT;
+    memccpy(provData.access_token, CONFIG_RASENS_ACCESS_TOKEN, 0, sizeof(provData.access_token));
+
+    //store defaults back to storage
+    storage_save_provisioning_data(&provData);
+  } else {
+    ESP_LOGI(TAG, "Loaded provisioning data: SSID=%s, MQTT host=%s, MQTT port=%u",
+             provData.ssid, provData.mqtt_host, provData.mqtt_port);
+  }
+
+  //connect to wifi using defaults
+  wifi_connect(provData.ssid, provData.password);
+
+  //publish current firmware version
+  updateFirmwareVersion(CONFIG_RASENS_HTTP_BACKEND_URL, provData.access_token);
+
+  //perform ota update if available
+  perform_ota_update(CONFIG_RASENS_HTTP_BACKEND_URL, provData.access_token);
+
+  //initialize sntp for time synchronization
+  init_sntp(CONFIG_RASENS_SNTP_SYNC_INTERVAL_MS); //sync interval 5 minutes
+
+  //initialize IoT IS platform connection and wait for connection
+  iotIs.connect(provData.access_token, provData.mqtt_host, provData.mqtt_port);
+  while(!iotIs.isConnected) {
+    ESP_LOGI(TAG, "Waiting for MQTT connection...");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+
   // I2C configuration: adjust pins and bus speed for your hardware
-  const i2c_port_t port = I2C_NUM_0;
-  const gpio_num_t SDA = 22;
-  const gpio_num_t SCL = 21;
+  /*const i2c_port_t port = I2C_NUM_0;
+  const gpio_num_t SDA = GPIO_NUM_22;
+  const gpio_num_t SCL = GPIO_NUM_21;
   const gpio_num_t enablePin = GPIO_NUM_17;
 
   //initialize enable pin
   gpio_set_direction(enablePin, GPIO_MODE_OUTPUT);
   gpio_set_level(enablePin, 1); // Enable PSU by setting pin HIGH
+
+  // initialize wifi
+
+  // Connect to IoT IS platform
 
 
   // Initialize flyback PSU device context
@@ -111,12 +164,12 @@ void app_main(void)
   if (idle != ESP_OK)
   {
     ESP_LOGW(TAG, "Timeout waiting for range switch to complete");
-  }
+  }*/
 
 
   while (true)
   {
-    flyback_psu_status_t s;
+    /*flyback_psu_status_t s;
     if (flyback_psu_read_status(&psu, &s) == ESP_OK)
     {
       float vfb = flyback_psu_counts_to_volts(&psu, s.fb_counts);
@@ -137,7 +190,7 @@ void app_main(void)
              "Counts: CPS=%.1f  CPM=%.1f  Total=%llu",
              cps, cpm, (unsigned long long)total);
 
-    // Delay 30 second before next status update
+    // Delay 30 second before next status update*/
     vTaskDelay(pdMS_TO_TICKS(30000));
   }
 } 

@@ -15,8 +15,10 @@ Each service characteristic uses the last 2 bytes for identification. For simpli
         0011 - SSID Characteristics
         0012 - Password Characteristics
         0013 - MQTT Server Characteristics
-        0014 - Command Characteristics
-        0015 - Status Characteristics
+        0014 - MQTT Port Characteristics
+        0015 - Access Token Characteristics
+        0016 - Command Characteristics
+        0017 - Status Characteristics
     0020 - Configuration Service
         0021 - Interval Characteristics    
         0022 - Range Characteristics 
@@ -56,8 +58,20 @@ Defined services (later will be extended further):
 - Permissions: R/W
 - Data: UTF-8, max. 63 bytes
 
-#### Apply/Command
+#### MQTT Port
 - UUID: ```0014```
+- Properties: Read/Write
+- Permissions: R/W
+- Data: UTF-8, max. 5 bytes
+
+#### Access Token
+- UUID: ```0015```
+- Properties: Write
+- Permissions: currently only W, in the future consider encrypted W
+- Data: UTF-8, max. 24 bytes
+
+#### Apply/Command
+- UUID: ```0016```
 - Properties: Write
 - Permissions: W
 - Data: 1 byte
@@ -66,7 +80,7 @@ Defined services (later will be extended further):
     - ```0x03``` - Save (do not connect instantly)
 
 #### Status
-- UUID: ```0015```
+- UUID: ```0017```
 - Properties: Read + Notify
 - Permissions: R
 - Data: 8 byte array
