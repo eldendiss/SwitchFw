@@ -83,4 +83,9 @@ menu "RaSens"
         help 
           "Set to true if the interrupt pin is active HIGH, false if active LOW."
 
+    config RASENS_I2C_ADDRESS
+        int "I2C Address"
+        default 42
+        help 
+          "I2C address of the RaSens device."
 endmenu

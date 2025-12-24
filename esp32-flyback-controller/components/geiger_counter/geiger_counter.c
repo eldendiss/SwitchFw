@@ -161,3 +161,10 @@ float geiger_counter_pcnt_get_cpm(geiger_counter_pcnt_t* dev)
   uint32_t secs = dev->filled_secs ? dev->filled_secs : 1;
   return (float)sum * (60.0f / (float)secs);
 }
+
+float geiger_counter_pcnt_get_sieverts_per_hour(geiger_counter_pcnt_t* dev, float conversion_factor)
+{
+  if (!dev) return 0.0f;
+  float cpm = geiger_counter_pcnt_get_cpm(dev);
+  return cpm * conversion_factor;
+}

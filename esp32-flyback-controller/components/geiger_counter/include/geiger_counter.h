@@ -59,6 +59,9 @@ float geiger_counter_pcnt_get_cps(geiger_counter_pcnt_t* dev);
 /** CPM rolling 60s window (scaled until filled) */
 float geiger_counter_pcnt_get_cpm(geiger_counter_pcnt_t* dev);
 
+/** Convert CPM to µSv/h using given conversion factor */
+float geiger_counter_pcnt_get_sieverts_per_hour(geiger_counter_pcnt_t* dev, float conversion_factor);
+
 #ifdef __cplusplus
 }
 #endif
