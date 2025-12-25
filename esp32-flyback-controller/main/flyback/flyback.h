@@ -3,6 +3,7 @@
 #define FLYBACK_H
 
 #include "flyback_psu.h"
+#include "geiger_counter.h"
 
 /**
  * @brief Initialize flyback PSU controller, configure GPIO pins and I2C interface.
@@ -99,5 +100,7 @@ esp_err_t flyback_wait_for_idle(uint32_t timeout_ms, uint32_t poll_interval_ms);
 
 float flyback_counts_to_volts(uint16_t counts);
 uint16_t flyback_volts_to_counts(float volts);
+
+void flyback_set_geiger_counter_device(geiger_counter_pcnt4_t* dev);
 
 #endif // FLYBACK_H

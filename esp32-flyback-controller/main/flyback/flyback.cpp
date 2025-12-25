@@ -1,6 +1,7 @@
 #include "flyback.h"
 #include "esp_log.h"
 #include "flyback_psu.h"
+#include "geiger_counter.h"
 
 #define TAG "flyback"
 
@@ -18,6 +19,8 @@ static bool is_awake = false;
 static bool is_initialized = false;
 
 static float voltage_table[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+
+static geiger_counter_pcnt4_t *gc_dev = nullptr;
 
 esp_err_t flyback_init()
 {
@@ -64,6 +67,7 @@ esp_err_t flyback_sleep()
     if (!is_initialized)
         return ESP_ERR_INVALID_STATE;
 
+    geiger_counter_pcnt_pause(gc_dev);
     gpio_set_level((gpio_num_t)CONFIG_RASENS_SLEEP_PIN, 0); // Set sleep pin LOW to enter sleep mode
     is_awake = false;
     return ESP_OK;
@@ -75,6 +79,10 @@ esp_err_t flyback_wake()
         return ESP_ERR_INVALID_STATE;
 
     gpio_set_level((gpio_num_t)CONFIG_RASENS_SLEEP_PIN, 1); // Set sleep pin HIGH to exit sleep mode
+
+    // Small delay to allow PSU to stabilize after waking up
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    geiger_counter_pcnt_resume(gc_dev);
     is_awake = true;
     return ESP_OK;
 }
@@ -90,6 +98,8 @@ esp_err_t flyback_enable()
         return ESP_ERR_INVALID_STATE;
 
     gpio_set_level((gpio_num_t)CONFIG_RASENS_ENABLE_PIN, 1); // Set enable pin HIGH to enable PSU
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    geiger_counter_pcnt_resume(gc_dev);
     is_enabled = true;
     return ESP_OK;
 }
@@ -98,7 +108,8 @@ esp_err_t flyback_disable()
 {
     if (!is_initialized)
         return ESP_ERR_INVALID_STATE;
-
+    
+    geiger_counter_pcnt_pause(gc_dev);
     gpio_set_level((gpio_num_t)CONFIG_RASENS_ENABLE_PIN, 0); // Set enable pin LOW to disable PSU
     is_enabled = false;
     return ESP_OK;
@@ -205,7 +216,16 @@ esp_err_t flyback_set_channel(uint8_t channel)
 
     ESP_LOGI(TAG, "Selecting range %d -> target voltage ~%.1f V (counts=%u)",
              channel, voltage_table[channel], (unsigned int)(voltage_table[channel] * (1023.0f / psu.fullscale_volts)));
-    return flyback_psu_select_range(&psu, channel);
+    esp_err_t err = flyback_psu_select_range(&psu, channel);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to set channel %d: %s", channel, esp_err_to_name(err));
+        return err;
+    }
+    if (gc_dev)
+        geiger_counter_set_active_range(gc_dev, channel);
+    return err;
 }
 
 esp_err_t flyback_get_channel(uint8_t *channel)
@@ -254,4 +274,9 @@ uint16_t flyback_volts_to_counts(float volts)
     if (!is_initialized)
         return -1;
     return (uint16_t)((volts * 1023.0f) / psu.fullscale_volts);
+}
+
+void flyback_set_geiger_counter_device(geiger_counter_pcnt4_t* dev)
+{
+    gc_dev = dev;
 }
