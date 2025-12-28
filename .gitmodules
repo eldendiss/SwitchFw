@@ -1,0 +1,3 @@
+[submodule "esp32-flyback-controller/components/IoT_IS-esp32"]
+	path = esp32-flyback-controller/components/IoT_IS-esp32
+	url = https://github.com/MarviXs/IoT_IS-esp32.git

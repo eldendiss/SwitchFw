@@ -1,0 +1,91 @@
+menu "RaSens"
+    config RASENS_MQTT_HOST
+        string "MQTT Broker Host"
+        default "isdg.fei.stuba.sk"
+        help 
+          "Hostname or IP address of the MQTT broker."
+
+    config RASENS_MQTT_PORT
+        int "MQTT Broker Port"
+        default 1883
+        help 
+          "Port number of the MQTT broker."
+
+    config RASENS_HTTP_BACKEND_URL
+        string "Backend Server URL"
+        default "https://isdg.fei.stuba.sk/backend/"
+        help 
+          "URL of the backend server for HTTP communication."
+
+    config RASENS_ACCESS_TOKEN
+        string "Access Token"
+        default ""
+        help 
+          "Access token for authenticating with the backend server."
+        
+    config RASENS_OTA_ENABLED
+        bool "Enable OTA Updates"
+        default y
+        help 
+          "Enable or disable Over-The-Air updates for the firmware."
+
+    config RASENS_DEFAULT_SSID
+        string "WiFi SSID"
+        default "your_ssid"
+        help 
+          "Deafult SSID of the WiFi network to connect to."
+    
+    config RASENS_DEFAULT_WIFI_PASSWORD
+        string "WiFi Password"
+        default "your_password"
+        help 
+          "Default password for the WiFi network."
+
+    config RASENS_SNTP_SYNC_INTERVAL_MS
+        int "SNTP Sync Interval (ms)"
+        default 300000
+        help 
+          "Interval in milliseconds for SNTP time synchronization."
+
+    config RASENS_SDA_PIN
+        int "I2C SDA Pin"
+        default 22
+        help 
+          "GPIO pin number for I2C SDA line."
+
+    config RASENS_SCL_PIN
+        int "I2C SCL Pin"
+        default 21
+        help 
+          "GPIO pin number for I2C SCL line."
+
+    config RASENS_ENABLE_PIN
+        int "Enable Pin"
+        default 17
+        help 
+          "GPIO pin number used to enable the device."
+
+    config RASENS_SLEEP_PIN
+        int "Sleep Pin"
+        default 18
+        help 
+          "GPIO pin number used to put the device to sleep."
+
+    config RASENS_INTERRUPT_PIN
+        int "Interrupt Pin"
+        default 4
+        help 
+          "GPIO pin number used for interrupts."
+
+    config RASENS_INTERRUPT_PIN_ACTIVE_HIGH
+        bool "Interrupt Pin Active High"
+        default y
+        help 
+          "Set to true if the interrupt pin is active HIGH, false if active LOW."
+
+    config RASENS_I2C_ADDRESS
+        int "I2C Address"
+        default 42
+        help 
+          "I2C address of the RaSens device."
+endmenu
