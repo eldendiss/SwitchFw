@@ -62,7 +62,7 @@ Defined services (later will be extended further):
 - UUID: ```0014```
 - Properties: Read/Write
 - Permissions: R/W
-- Data: UTF-8, max. 5 bytes
+- Data: uint16
 
 #### Access Token
 - UUID: ```0015```

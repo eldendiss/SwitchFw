@@ -14,6 +14,7 @@
 #include "sntp.h"
 #include "flyback.h"
 #include "commands/commands.h"
+#include "ble.h"
 
 static const char *TAG = "main";
 
@@ -28,6 +29,8 @@ extern "C" void app_main(void)
 
   // mark app as valid to avoid rollback
   mark_app_valid_cancel_rollback();
+
+  ble_init();
 
   // initialize wifi
   wifi_init();
@@ -165,9 +168,10 @@ extern "C" void app_main(void)
 
   while (true)
   {
+    // wait 1 minute before next measurement
+    vTaskDelay(pdMS_TO_TICKS(devCfg.interval));
     /*flyback_wake();
     flyback_enable();
-    vTaskDelay(pdMS_TO_TICKS(10000)); // Wait 3 seconds after enabling
     geiger_counter_pcnt_resume(&gc);*/
     flyback_psu_status_t s;
     if (flyback_get_status(&s) == ESP_OK)
@@ -198,7 +202,5 @@ extern "C" void app_main(void)
     /*geiger_counter_pcnt_pause(&gc);
     flyback_disable();
     flyback_sleep();*/
-    // wait 1 minute before next measurement
-    vTaskDelay(pdMS_TO_TICKS(devCfg.interval));
   }
 }
