@@ -74,5 +74,12 @@ esp_err_t ble_init(void){
     /* Start the NimBLE host task */
     nimble_port_freertos_init(nimble_host_task);
 
+    //set min MTU
+    int rc = ble_att_set_preferred_mtu(64);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "failed to set preferred MTU, error code: %d", rc);
+        return ESP_FAIL;
+    }
+
     return ret;
 }

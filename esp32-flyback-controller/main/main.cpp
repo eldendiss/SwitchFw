@@ -15,6 +15,7 @@
 #include "flyback.h"
 #include "commands/commands.h"
 #include "ble.h"
+#include "provisioning.h"
 
 static const char *TAG = "main";
 
@@ -35,25 +36,25 @@ extern "C" void app_main(void)
   // initialize wifi
   wifi_init();
 
-  // try to get provisioning data
-  provisioning_data_t provData;
-  if (storage_load_provisioning_data(&provData) != ESP_OK)
-  {
-    ESP_LOGE(TAG, "Failed to load provisioning data from storage, using defaults");
-    memccpy(provData.ssid, CONFIG_RASENS_DEFAULT_SSID, 0, sizeof(provData.ssid));
-    memccpy(provData.password, CONFIG_RASENS_DEFAULT_WIFI_PASSWORD, 0, sizeof(provData.password));
-    memccpy(provData.mqtt_host, CONFIG_RASENS_MQTT_HOST, 0, sizeof(provData.mqtt_host));
-    provData.mqtt_port = CONFIG_RASENS_MQTT_PORT;
-    memccpy(provData.access_token, CONFIG_RASENS_ACCESS_TOKEN, 0, sizeof(provData.access_token));
+  provisioning_manager_init();
 
-    // store defaults back to storage
-    storage_save_provisioning_data(&provData);
-  }
-  else
-  {
-    ESP_LOGI(TAG, "Loaded provisioning data: SSID=%s, MQTT host=%s, MQTT port=%u",
-             provData.ssid, provData.mqtt_host, provData.mqtt_port);
-  }
+  // try to get provisioning data
+  provisioning_data_t cfg = {0};
+bool have_nvs = (storage_load_provisioning_data(&cfg) == ESP_OK) && validate_prov(&cfg); // if validate_prov visible, copy same logic here
+if (!have_nvs) {
+    memset(&cfg, 0, sizeof(cfg));
+    strncpy(cfg.ssid,         CONFIG_RASENS_DEFAULT_SSID,          sizeof(cfg.ssid)-1);
+    strncpy(cfg.password,     CONFIG_RASENS_DEFAULT_WIFI_PASSWORD, sizeof(cfg.password)-1);
+    strncpy(cfg.mqtt_host,    CONFIG_RASENS_MQTT_HOST,             sizeof(cfg.mqtt_host)-1);
+    cfg.mqtt_port = CONFIG_RASENS_MQTT_PORT;
+    strncpy(cfg.access_token, CONFIG_RASENS_ACCESS_TOKEN,          sizeof(cfg.access_token)-1);
+}
+
+// Set supervisor active BEFORE starting supervisor task
+connection_supervisor_set_active(&cfg, have_nvs);
+
+// Start supervisor: it will retry indefinitely
+ESP_ERROR_CHECK(connection_supervisor_init());
 
   // try to load device configuration data
  
@@ -79,25 +80,19 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "Loaded device configuration data: interval=%u ms, active_range = %u", devCfg.interval,devCfg.active_range);
   }
 
-  // connect to wifi using defaults
-  wifi_connect(provData.ssid, provData.password);
-
-  // publish current firmware version
-  updateFirmwareVersion(CONFIG_RASENS_HTTP_BACKEND_URL, provData.access_token);
-
-  // perform ota update if available
-  perform_ota_update(CONFIG_RASENS_HTTP_BACKEND_URL, provData.access_token);
-
+  //wait for provisioning to complete
+  ESP_LOGI(TAG, "Waiting for provisioning to complete...");
+  wifi_wait_connected(pdMS_TO_TICKS(60000)); // wait up to 60 seconds
+  
   // initialize sntp for time synchronization
   init_sntp(CONFIG_RASENS_SNTP_SYNC_INTERVAL_MS); // sync interval 5 minutes
 
-  // initialize IoT IS platform connection and wait for connection
-  iotIs.connect(provData.access_token, provData.mqtt_host, provData.mqtt_port);
-  while (!iotIs.isConnected)
-  {
-    ESP_LOGI(TAG, "Waiting for MQTT connection...");
-    vTaskDelay(pdMS_TO_TICKS(1000));
-  }
+  // publish current firmware version
+  updateFirmwareVersion(CONFIG_RASENS_HTTP_BACKEND_URL, cfg.access_token);
+
+  // perform ota update if available
+  perform_ota_update(CONFIG_RASENS_HTTP_BACKEND_URL, cfg.access_token);
+
 
   job_manager.init();
   job_manager.register_command("setTube", setTube_command);

@@ -6,8 +6,7 @@
 #define TAG "wifi"
 
 #define MAXIMUM_RETRY 5
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT BIT1
+
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 
@@ -22,15 +21,12 @@ static void event_handler(void *arg, esp_event_base_t event_base,
     // Disconnection event - retry if under maximum attempts
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
-        if (s_retry_num < MAXIMUM_RETRY)
-        {
+        if (s_retry_num < MAXIMUM_RETRY) {
             esp_wifi_connect();
             s_retry_num++;
-            ESP_LOGW(TAG, "retry to connect to the AP");
-        }
-        else
-        {
-            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+            ESP_LOGW(TAG, "retry to connect to the AP (%d/%d)", s_retry_num, MAXIMUM_RETRY);
+        } else {
+            xEventGroupSetBits(s_wifi_event_group, WIFI_EVT_FAIL_BIT);
         }
         ESP_LOGE(TAG, "connect to the AP fail");
     }
@@ -40,7 +36,8 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
-        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        xEventGroupSetBits(s_wifi_event_group, WIFI_EVT_CONNECTED_BIT);
+        return;
     }
 }
 
@@ -48,6 +45,7 @@ esp_err_t wifi_init(void)
 {
     // Create FreeRTOS event group to signal Wi-Fi events
     s_wifi_event_group = xEventGroupCreate();
+    if (!s_wifi_event_group) return ESP_ERR_NO_MEM;
 
     // Initialize the TCP/IP stack
     ESP_ERROR_CHECK(esp_netif_init());
@@ -73,9 +71,6 @@ esp_err_t wifi_init(void)
         return err;
     }
 
-    // Start WiFi
-    err = esp_wifi_start();
-
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
     err = esp_event_handler_instance_register(WIFI_EVENT,
@@ -92,30 +87,60 @@ esp_err_t wifi_init(void)
                                               &event_handler,
                                               NULL,
                                               &instance_got_ip);
-    return err;
-}
-
-esp_err_t wifi_connect(const char *ssid, const char *password)
-{
-    wifi_config_t wifi_config = {};
-    strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
-    strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
-    // Set WiFi configuration
-    esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
     if (err != ESP_OK)
     {
         return err;
     }
 
-    // Connect to WiFi
-    err = esp_wifi_connect();
-
-    xEventGroupWaitBits(s_wifi_event_group,
-                                           WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-                                           pdFALSE,
-                                           pdFALSE,
-                                           portMAX_DELAY);
+    
+    // Start WiFi
+    err = esp_wifi_start();
     return err;
+}
+
+void wifi_reset_state(void)
+{
+    s_retry_num = 0;
+    xEventGroupClearBits(s_wifi_event_group, WIFI_EVT_CONNECTED_BIT | WIFI_EVT_FAIL_BIT);
+}
+
+esp_err_t wifi_connect_async(const char *ssid, const char *password)
+{
+    if (!ssid) return ESP_ERR_INVALID_ARG;
+
+    wifi_config_t wifi_config = {0};
+    strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
+    if (password) {
+        strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+
+    wifi_reset_state();
+
+    // Trigger connect
+    return esp_wifi_connect();
+}
+
+esp_err_t wifi_wait_connected(TickType_t ticks_to_wait)
+{
+    EventBits_t bits = xEventGroupWaitBits(
+        s_wifi_event_group,
+        WIFI_EVT_CONNECTED_BIT | WIFI_EVT_FAIL_BIT,
+        pdTRUE,   // clear on exit
+        pdFALSE,  // wait any bit
+        ticks_to_wait
+    );
+
+    if (bits & WIFI_EVT_CONNECTED_BIT) return ESP_OK;
+    if (bits & WIFI_EVT_FAIL_BIT) return ESP_FAIL;
+    return ESP_ERR_TIMEOUT;
+}
+
+bool wifi_is_connected()
+{
+    EventBits_t bits = xEventGroupGetBits(s_wifi_event_group);
+    return (bits & WIFI_EVT_CONNECTED_BIT) != 0;
 }
 
 esp_err_t wifi_get_status(wifi_ap_record_t *ap_info)
@@ -123,8 +148,15 @@ esp_err_t wifi_get_status(wifi_ap_record_t *ap_info)
     return esp_wifi_sta_get_ap_info(ap_info);
 }
 
+EventGroupHandle_t wifi_get_event_group(void)
+{
+    return s_wifi_event_group;
+}
+
+
 esp_err_t wifi_disconnect(void)
 {
+    wifi_reset_state();
     return esp_wifi_disconnect();
 }
 

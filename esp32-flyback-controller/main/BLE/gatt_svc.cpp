@@ -1,5 +1,7 @@
 #include "ble.h"
 #include "esp_log.h"
+#include "storage.h"
+#include "ble_gatt_bridge.h"
 
 #define TAG "GATT_SVC"
 
@@ -11,75 +13,63 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
 /**************************
  * Provisioning service
  **************************/
-static const ble_uuid128_t provisioning_svc_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                                    0x36, 0x4e, 0x00, 0x10);
+static const ble_uuid128_t provisioning_svc_uuid = BLE_UUID128_INIT(0x10, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 /* SSID characteristic */
 static char ssid_chr_val[32] = {0};
 static uint16_t ssid_chr_val_handle;
-static const ble_uuid128_t ssid_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                            0x36, 0x4e, 0x00, 0x11);
+static const ble_uuid128_t ssid_chr_uuid = BLE_UUID128_INIT(0x11, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 
 /* Password characteristic */
 static char password_chr_val[64] = {0};
 static uint16_t password_chr_val_handle;
-static const ble_uuid128_t password_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                                0x36, 0x4e, 0x00, 0x12);
+static const ble_uuid128_t password_chr_uuid = BLE_UUID128_INIT(0x12, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 /* MQTT server characteristic */
 static char mqtt_server_chr_val[64] = {0};
 static uint16_t mqtt_server_chr_val_handle;
-static const ble_uuid128_t mqtt_server_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                                   0x36, 0x4e, 0x00, 0x13);
+static const ble_uuid128_t mqtt_server_chr_uuid = BLE_UUID128_INIT(0x13, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 /* MQTT port characteristic */
 static uint8_t mqtt_port_chr_val[2] = {0};
 static uint16_t mqtt_port_chr_val_handle;
-static const ble_uuid128_t mqtt_port_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                                 0x36, 0x4e, 0x00, 0x14);
+static const ble_uuid128_t mqtt_port_chr_uuid = BLE_UUID128_INIT(0x14, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 
 /* Access token characteristic */
-static uint8_t access_token_chr_val[24] = {0};
+static uint8_t access_token_chr_val[25] = {0};
 static uint16_t access_token_chr_val_handle;
-static const ble_uuid128_t access_token_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                                    0x36, 0x4e, 0x00, 0x15);
+static const ble_uuid128_t access_token_chr_uuid = BLE_UUID128_INIT(0x15, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 
 /* Command characteristic */
 static uint8_t command_chr_val[1] = {0};
 static uint16_t command_chr_val_handle;
-static const ble_uuid128_t command_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                               0x36, 0x4e, 0x00, 0x16);
+static const ble_uuid128_t command_chr_uuid = BLE_UUID128_INIT(0x16, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 /* Status characteristic */
 static uint8_t status_chr_val[8] = {0};
 static uint16_t status_chr_val_handle;
+static uint16_t status_chr_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 static bool status_chr_conn_handle_inited = false;
 static uint8_t status_ind_status = false;
-static const ble_uuid128_t status_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                              0x36, 0x4e, 0x00, 0x17);
+static const ble_uuid128_t status_chr_uuid = BLE_UUID128_INIT(0x17, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 
 /************************
  * Configuration service
  ************************/
-static const ble_uuid128_t config_svc_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                              0x36, 0x4e, 0x00, 0x20);
+static const ble_uuid128_t config_svc_uuid = BLE_UUID128_INIT(0x20, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 /* Interval characteristic */
 static uint8_t interval_chr_val[4] = {0};
 static uint16_t interval_chr_val_handle;
-static const ble_uuid128_t interval_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                                0x36, 0x4e, 0x00, 0x21);
+static const ble_uuid128_t interval_chr_uuid = BLE_UUID128_INIT(0x21, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 /* Range characteristic */
 static uint8_t range_chr_val[1] = {0};
 static uint16_t range_chr_val_handle;
-static const ble_uuid128_t range_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                             0x36, 0x4e, 0x00, 0x22);
+static const ble_uuid128_t range_chr_uuid = BLE_UUID128_INIT(0x22, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 /* Voltage characteristic */
 static uint8_t voltage_chr_val[8] = {0};
 static uint16_t voltage_chr_val_handle;
-static const ble_uuid128_t voltage_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                               0x36, 0x4e, 0x00, 0x23);
+static const ble_uuid128_t voltage_chr_uuid = BLE_UUID128_INIT(0x23, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 
 /* Coefficient characteristic */
 static uint8_t coeff_chr_val[16] = {0};
 static uint16_t coeff_chr_val_handle;
-static const ble_uuid128_t coeff_chr_uuid = BLE_UUID128_INIT(0x70, 0x4d, 0x43, 0xa7, 0xdd, 0x07, 0x49, 0xf1, 0x98, 0x18, 0x8c, 0xa1,
-                                                             0x36, 0x4e, 0x00, 0x24);
+static const ble_uuid128_t coeff_chr_uuid = BLE_UUID128_INIT(0x24, 0x00, 0x4e, 0x36, 0xa1, 0x8c, 0x18, 0x98, 0xf1, 0x49, 0x07, 0xdd, 0xa7, 0x43, 0x4d, 0x70);
 
 /* GATT services table */
 static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
@@ -191,6 +181,7 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
         {
             rc = os_mbuf_append(ctxt->om, mqtt_port_chr_val,
                                 sizeof(mqtt_port_chr_val));
+            ESP_LOG_BUFFER_HEX(TAG, mqtt_port_chr_val, sizeof(mqtt_port_chr_val));
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
@@ -198,13 +189,15 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
         {
             rc = os_mbuf_append(ctxt->om, mqtt_server_chr_val,
                                 strlen(mqtt_server_chr_val) + 1);
+            ESP_LOG_BUFFER_HEX(TAG, mqtt_server_chr_val, strlen(mqtt_server_chr_val) + 1);
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
         if (attr_handle == status_chr_val_handle)
-        {
+        {            
             rc = os_mbuf_append(ctxt->om, status_chr_val,
                                 sizeof(status_chr_val));
+            ESP_LOG_BUFFER_HEX(TAG, status_chr_val, sizeof(status_chr_val));
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
@@ -212,6 +205,7 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
         {
             rc = os_mbuf_append(ctxt->om, interval_chr_val,
                                 sizeof(interval_chr_val));
+            ESP_LOG_BUFFER_HEX(TAG, interval_chr_val, sizeof(interval_chr_val));
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
@@ -219,6 +213,7 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
         {
             rc = os_mbuf_append(ctxt->om, range_chr_val,
                                 sizeof(range_chr_val));
+            ESP_LOG_BUFFER_HEX(TAG, range_chr_val, sizeof(range_chr_val));
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
@@ -226,6 +221,7 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
         {
             rc = os_mbuf_append(ctxt->om, voltage_chr_val,
                                 sizeof(voltage_chr_val));
+            ESP_LOG_BUFFER_HEX(TAG, voltage_chr_val, sizeof(voltage_chr_val));
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
@@ -233,6 +229,7 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
         {
             rc = os_mbuf_append(ctxt->om, coeff_chr_val,
                                 sizeof(coeff_chr_val));
+            ESP_LOG_BUFFER_HEX(TAG, coeff_chr_val, sizeof(coeff_chr_val));
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
         goto error;
@@ -258,6 +255,7 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
             if (rc != 0)
                 return BLE_ATT_ERR_UNLIKELY;
             ssid_chr_val[len] = '\0';
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
         if (attr_handle == password_chr_val_handle)
@@ -269,6 +267,7 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
             if (rc != 0)
                 return BLE_ATT_ERR_UNLIKELY;
             password_chr_val[len] = '\0';
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
         if (attr_handle == mqtt_server_chr_val_handle)
@@ -280,6 +279,7 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
             if (rc != 0)
                 return BLE_ATT_ERR_UNLIKELY;
             mqtt_server_chr_val[len] = '\0';
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
         if (attr_handle == mqtt_port_chr_val_handle)
@@ -303,6 +303,9 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
             if (rc != 0)
                 return BLE_ATT_ERR_UNLIKELY;
             access_token_chr_val[len] = '\0';
+            ESP_LOG_BUFFER_CHAR(TAG, access_token_chr_val, len);
+            ESP_LOG_BUFFER_HEX(TAG, access_token_chr_val, len);
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
         if (attr_handle == command_chr_val_handle)
@@ -315,6 +318,10 @@ static int chr_access(uint16_t conn_handle, uint16_t attr_handle,
                 return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
             }
             rc = os_mbuf_copydata(ctxt->om, 0, ctxt->om->om_len, command_chr_val);
+            ESP_LOGI(TAG, "Command characteristic written, value=0x%02X",
+                     command_chr_val[0]);
+
+            provisioning_manager_on_command(command_chr_val[0]);
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
 
@@ -452,11 +459,55 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event)
     if (event->subscribe.attr_handle == status_chr_val_handle)
     {
         /* Update heart rate subscription status */
-        status_chr_val_handle = event->subscribe.conn_handle;
+        status_chr_conn_handle = event->subscribe.conn_handle;
         status_chr_conn_handle_inited = true;
-        status_ind_status = event->subscribe.cur_indicate;
+        status_ind_status = event->subscribe.cur_notify;
     }
 }
+
+/** Get provisioning data snapshot */
+void ble_gatt_get_prov_snapshot(provisioning_data_t *out)
+{
+    if (!out) return;
+    memset(out, 0, sizeof(*out));
+
+    strncpy(out->ssid, ssid_chr_val, sizeof(out->ssid) - 1);
+    strncpy(out->password, password_chr_val, sizeof(out->password) - 1);
+    strncpy(out->mqtt_host, mqtt_server_chr_val, sizeof(out->mqtt_host) - 1);
+
+    uint16_t port = ((uint16_t)mqtt_port_chr_val[1] << 8) | mqtt_port_chr_val[0];
+    out->mqtt_port = port;
+
+    strncpy(out->access_token, (char*)access_token_chr_val, sizeof(out->access_token) - 1);
+}
+
+void ble_gatt_set_status(const prov_status8_t *st)
+{
+    if (!st) return;
+    memcpy(status_chr_val, st, sizeof(status_chr_val));
+}
+
+
+void ble_gatt_notify_status(void)
+{
+    // Only if a client subscribed to notifications/indications
+    if (!status_chr_conn_handle_inited) return;
+    if (!status_ind_status) return;
+
+    // Notify/indicate updated value
+    // For NimBLE: use ble_gatts_chr_updated(val_handle) to notify subscribers
+    ble_gatts_chr_updated(status_chr_val_handle);
+}
+
+void ble_gatt_clear_prov_buffers(void)
+{
+    memset(ssid_chr_val, 0, sizeof(ssid_chr_val));
+    memset(password_chr_val, 0, sizeof(password_chr_val));
+    memset(mqtt_server_chr_val, 0, sizeof(mqtt_server_chr_val));
+    memset(mqtt_port_chr_val, 0, sizeof(mqtt_port_chr_val));
+    memset(access_token_chr_val, 0, sizeof(access_token_chr_val));
+}
+
 
 /*
  *  GATT server initialization
@@ -484,6 +535,87 @@ int gatt_svc_init(void)
     if (rc != 0)
     {
         return rc;
+    }
+
+    //load initial values from storage
+    provisioning_data_t prov_data;
+    esp_err_t err = storage_load_provisioning_data(&prov_data);
+    if (err == ESP_OK)
+    {
+        strncpy(ssid_chr_val, prov_data.ssid, sizeof(ssid_chr_val) - 1);
+        strncpy(password_chr_val, prov_data.password, sizeof(password_chr_val) - 1);
+        strncpy(mqtt_server_chr_val, prov_data.mqtt_host, sizeof(mqtt_server_chr_val) - 1);
+        mqtt_port_chr_val[1] = (prov_data.mqtt_port >> 8) & 0xFF;
+        mqtt_port_chr_val[0] = prov_data.mqtt_port & 0xFF;
+        strncpy((char*)access_token_chr_val, prov_data.access_token, sizeof(access_token_chr_val) - 1);
+        ESP_LOGI(TAG, "Loaded provisioning data from storage");
+    }
+    else
+    {
+        ESP_LOGI(TAG, "No provisioning data in storage");
+    }
+    //log loaded provisioning data
+    ESP_LOGI(TAG, "SSID: %s", ssid_chr_val);
+    ESP_LOGI(TAG, "Password: %s", password_chr_val);
+    ESP_LOGI(TAG, "MQTT server: %s", mqtt_server_chr_val);
+    uint16_t mqtt_port = (mqtt_port_chr_val[0] << 8)
+                            | mqtt_port_chr_val[1];
+    ESP_LOGI(TAG, "MQTT port: %d", mqtt_port);
+    ESP_LOGI(TAG, "Access token: %s", access_token_chr_val);
+
+    device_config_data_t config_data;
+    err = storage_load_device_config_data(&config_data);
+    if (err == ESP_OK)
+    {
+        interval_chr_val[3] = (config_data.interval >> 24) & 0xFF;
+        interval_chr_val[2] = (config_data.interval >> 16) & 0xFF;
+        interval_chr_val[1] = (config_data.interval >> 8) & 0xFF;
+        interval_chr_val[0] = config_data.interval & 0xFF;
+        range_chr_val[0] = config_data.active_range+1;
+
+        for (int i = 0; i < 4; i++)
+        {
+            voltage_chr_val[i * 2 + 1] = (config_data.set_voltage[i] >> 8) & 0xFF;
+            voltage_chr_val[i * 2] = config_data.set_voltage[i] & 0xFF;
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            float coeff = (float)config_data.coeff[i]/10000.0;
+            //convert to 4 bytes little endian
+            memcpy(&coeff_chr_val[i * 4], &coeff, 4);
+
+        }
+
+        ESP_LOGI(TAG, "Loaded device config data from storage");
+    }
+    else
+    {
+        ESP_LOGI(TAG, "No device config data in storage");
+    }
+
+    //log loaded device config data
+    uint32_t interval = (interval_chr_val[3] << 24)
+                        | (interval_chr_val[2] << 16)
+                        | (interval_chr_val[1] << 8)
+                        | interval_chr_val[0];
+    ESP_LOGI(TAG, "Interval: %lu ms", interval);
+    ESP_LOGI(TAG, "Active range: %u", range_chr_val[0]);
+    ESP_LOGI(TAG, "Set voltages:");
+    for (int i = 0; i < 4; i++)
+    {
+        uint16_t voltage = (voltage_chr_val[i * 2 + 1] << 8)
+                            | voltage_chr_val[i * 2];
+        ESP_LOGI(TAG, "  R%d: %u V", i + 1, voltage);
+    }
+    ESP_LOGI(TAG, "Coefficients:");
+    for (int i = 0; i < 4; i++)
+    {
+        uint32_t coeff = (coeff_chr_val[i * 4 + 3] << 24)
+                         | (coeff_chr_val[i * 4 + 2] << 16)
+                         | (coeff_chr_val[i * 4 + 1] << 8)
+                         | coeff_chr_val[i * 4];
+        ESP_LOGI(TAG, "  R%d: %lu", i + 1, coeff);
     }
 
     return 0;

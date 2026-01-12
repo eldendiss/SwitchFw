@@ -3,10 +3,11 @@
 
 #include "ble.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 
 #define TAG "GAP_SVC"
 
-#define DEVICE_NAME "RaSens-XXXXXX"
+#define DEVICE_NAME_BASE "RaSens-"
 
 /* Private function declarations */
 inline static void format_addr(char *addr_str, uint8_t addr[]);
@@ -137,7 +138,6 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
 
     /* Handle different GAP event */
     switch (event->type) {
-
     /* Connect event */
     case BLE_GAP_EVENT_CONNECT:
         /* A new connection was established or a connection attempt failed. */
@@ -274,6 +274,9 @@ void adv_init(void) {
         return;
     }
 
+    /** Get MAC address from ESP */
+    esp_read_mac(addr_val, ESP_MAC_BT);
+
     /* Printing ADDR */
     rc = ble_hs_id_copy_addr(own_addr_type, addr_val, NULL);
     if (rc != 0) {
@@ -295,10 +298,15 @@ int gap_init(void) {
     ble_svc_gap_init();
 
     /* Set GAP device name */
-    rc = ble_svc_gap_device_name_set(DEVICE_NAME);
+    char device_name[32];
+    uint8_t addr[6] = {0};
+    esp_read_mac(addr, ESP_MAC_BASE);
+    snprintf(device_name, sizeof(device_name), "%s%02X%02X%02X",
+             DEVICE_NAME_BASE, addr[3], addr[4], addr[5]);
+    rc = ble_svc_gap_device_name_set(device_name);
     if (rc != 0) {
         ESP_LOGE(TAG, "failed to set device name to %s, error code: %d",
-                 DEVICE_NAME, rc);
+                 device_name, rc);
         return rc;
     }
     return rc;
