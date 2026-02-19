@@ -4,32 +4,49 @@
 #include "flyback.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "hv_mon.h"
 
 #include "../main.h"
 
-bool delayCommand(const std::vector<double> &params){
+bool delayCommand(const std::vector<double> &params)
+{
     if (params.empty())
         return false;
 
     int delayMs = static_cast<int>(params[0]);
-    vTaskDelay(delayMs/portTICK_PERIOD_MS);
+    vTaskDelay(delayMs / portTICK_PERIOD_MS);
     return true;
 }
 
-bool setTube_command(const std::vector<double> &params){
+bool setIntervalCommand(const std::vector<double> &params)
+{
+    if (params.empty())
+        return false;
+
+    int interval = static_cast<int>(params[0]);
+    devCfg.interval = interval;
+    storage_save_device_config_data(&devCfg);
+    return true;
+}
+
+bool setTube_command(const std::vector<double> &params)
+{
     if (params.empty())
         return false;
 
     int rPinHelp = static_cast<int>(params[0]);
     ESP_LOGI("COMMAND", "Setting tube range to %.2f", params[0]);
 
-    if (rPinHelp == 4) {
+    if (rPinHelp == 4)
+    {
         flyback_disable();
         ESP_LOGI("COMMAND", "Voltage switched off");
+        hv_avg_reset();
         return true;
     }
 
-    if (rPinHelp <= 3) {
+    if (rPinHelp <= 3)
+    {
         flyback_enable();
         flyback_set_channel((uint8_t)rPinHelp);
         esp_err_t idle = flyback_wait_for_idle(3000, 10);
@@ -37,10 +54,11 @@ bool setTube_command(const std::vector<double> &params){
         {
             ESP_LOGW("COMMAND", "Timeout waiting for range switch to complete");
         }
-        
+
         devCfg.active_range = (uint8_t)rPinHelp;
         storage_save_device_config_data(&devCfg);
         ESP_LOGI("COMMAND", "Range %d applied", rPinHelp);
+        hv_avg_reset();
 
         return true;
     }
@@ -48,7 +66,8 @@ bool setTube_command(const std::vector<double> &params){
     return true;
 }
 
-bool setVoltage_r1_command(const std::vector<double> &params){
+bool setVoltage_r1_command(const std::vector<double> &params)
+{
     if (params.empty())
         return false;
 
@@ -58,10 +77,25 @@ bool setVoltage_r1_command(const std::vector<double> &params){
     devCfg.set_voltage[0] = static_cast<uint16_t>(params[0]);
     storage_save_device_config_data(&devCfg);
 
+    // switch ranges to apply voltage
+    flyback_disable();
+    // select suitable range
+    uint8_t tRange = 0;
+    if (devCfg.active_range == tRange)
+    {
+        tRange++;
+    }
+    flyback_set_channel(tRange);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+    flyback_set_channel(devCfg.active_range);
+    flyback_enable();
+    hv_avg_reset();
+
     return true;
 }
 
-bool setVoltage_r2_command(const std::vector<double> &params){
+bool setVoltage_r2_command(const std::vector<double> &params)
+{
     if (params.empty())
         return false;
 
@@ -71,10 +105,25 @@ bool setVoltage_r2_command(const std::vector<double> &params){
     devCfg.set_voltage[1] = static_cast<uint16_t>(params[0]);
     storage_save_device_config_data(&devCfg);
 
+    // switch ranges to apply voltage
+    flyback_disable();
+    // select suitable range
+    uint8_t tRange = 0;
+    if (devCfg.active_range == tRange)
+    {
+        tRange++;
+    }
+    flyback_set_channel(tRange);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+    flyback_set_channel(devCfg.active_range);
+    flyback_enable();
+    hv_avg_reset();
+
     return true;
 }
 
-bool setVoltage_r3_command(const std::vector<double> &params){
+bool setVoltage_r3_command(const std::vector<double> &params)
+{
     if (params.empty())
         return false;
 
@@ -84,10 +133,25 @@ bool setVoltage_r3_command(const std::vector<double> &params){
     devCfg.set_voltage[2] = static_cast<uint16_t>(params[0]);
     storage_save_device_config_data(&devCfg);
 
+    // switch ranges to apply voltage
+    flyback_disable();
+    // select suitable range
+    uint8_t tRange = 0;
+    if (devCfg.active_range == tRange)
+    {
+        tRange++;
+    }
+    flyback_set_channel(tRange);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+    flyback_set_channel(devCfg.active_range);
+    flyback_enable();
+    hv_avg_reset();
+
     return true;
 }
 
-bool setVoltage_r4_command(const std::vector<double> &params){
+bool setVoltage_r4_command(const std::vector<double> &params)
+{
     if (params.empty())
         return false;
 
@@ -97,10 +161,25 @@ bool setVoltage_r4_command(const std::vector<double> &params){
     devCfg.set_voltage[3] = static_cast<uint16_t>(params[0]);
     storage_save_device_config_data(&devCfg);
 
+    // switch ranges to apply voltage
+    flyback_disable();
+    // select suitable range
+    uint8_t tRange = 0;
+    if (devCfg.active_range == tRange)
+    {
+        tRange++;
+    }
+    flyback_set_channel(tRange);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+    flyback_set_channel(devCfg.active_range);
+    flyback_enable();
+    hv_avg_reset();
+
     return true;
 }
 
-bool setConversion_r1_command(const std::vector<double> &params){
+bool setConversion_r1_command(const std::vector<double> &params)
+{
     if (params.empty())
         return false;
 
@@ -112,7 +191,8 @@ bool setConversion_r1_command(const std::vector<double> &params){
     return true;
 }
 
-bool setConversion_r2_command(const std::vector<double> &params){
+bool setConversion_r2_command(const std::vector<double> &params)
+{
     if (params.empty())
         return false;
 
@@ -124,7 +204,8 @@ bool setConversion_r2_command(const std::vector<double> &params){
     return true;
 }
 
-bool setConversion_r3_command(const std::vector<double> &params){
+bool setConversion_r3_command(const std::vector<double> &params)
+{
     if (params.empty())
         return false;
 
@@ -136,7 +217,8 @@ bool setConversion_r3_command(const std::vector<double> &params){
     return true;
 }
 
-bool setConversion_r4_command(const std::vector<double> &params){
+bool setConversion_r4_command(const std::vector<double> &params)
+{
     if (params.empty())
         return false;
 

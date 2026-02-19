@@ -75,6 +75,10 @@ void setup()
   EN_init_input();
   range_init();
 
+  // I2C
+  i2c_bind(&g_cfg, &g_state);
+  i2c_init(0x2A); // slave addr
+
   _delay_ms(3000);
 
   noInterrupts();
@@ -95,9 +99,6 @@ void setup()
   { /* settle */
   }
 
-  // I2C
-  i2c_bind(&g_cfg, &g_state);
-  i2c_init(0x2A); // slave addr
   (void)loaded;
 }
 

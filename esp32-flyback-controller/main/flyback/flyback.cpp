@@ -99,7 +99,8 @@ esp_err_t flyback_enable()
 
     gpio_set_level((gpio_num_t)CONFIG_RASENS_ENABLE_PIN, 1); // Set enable pin HIGH to enable PSU
     vTaskDelay(pdMS_TO_TICKS(3000));
-    geiger_counter_pcnt_resume(gc_dev);
+    if(gc_dev != NULL)
+        geiger_counter_pcnt_resume(gc_dev);
     is_enabled = true;
     return ESP_OK;
 }
@@ -109,7 +110,8 @@ esp_err_t flyback_disable()
     if (!is_initialized)
         return ESP_ERR_INVALID_STATE;
     
-    geiger_counter_pcnt_pause(gc_dev);
+    if(gc_dev != NULL)
+        geiger_counter_pcnt_pause(gc_dev);
     gpio_set_level((gpio_num_t)CONFIG_RASENS_ENABLE_PIN, 0); // Set enable pin LOW to disable PSU
     is_enabled = false;
     return ESP_OK;

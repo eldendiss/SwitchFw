@@ -3,12 +3,25 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 #ifndef FLYBACK_PSU_I2C_TIMEOUT_MS
 #define FLYBACK_PSU_I2C_TIMEOUT_MS 100 //!< Default I2C timeout in milliseconds
 #endif
 
 static const char *TAG = "flyback_psu";
+static SemaphoreHandle_t s_i2c_bus_mtx;
+
+static inline bool bus_lock(SemaphoreHandle_t mtx, TickType_t to)
+{
+    return (mtx != NULL) && (xSemaphoreTake(mtx, to) == pdTRUE);
+}
+
+static inline void bus_unlock(SemaphoreHandle_t mtx)
+{
+    if (mtx) xSemaphoreGive(mtx);
+}
 
 /**
  * \brief Initialize the flyback PSU device context and I²C master driver.
@@ -52,6 +65,11 @@ esp_err_t flyback_psu_init(flyback_psu_t *dev,
     esp_err_t e = i2c_driver_install(port, I2C_MODE_MASTER, 0, 0, 0);
     if (e == ESP_ERR_INVALID_STATE)
         e = ESP_OK; // Driver already installed, reuse it
+
+    if(s_i2c_bus_mtx == NULL){
+        s_i2c_bus_mtx = xSemaphoreCreateMutex();
+        ESP_RETURN_ON_FALSE(s_i2c_bus_mtx, ESP_ERR_NO_MEM, TAG, "mutex alloc");
+    }
     return e;
 }
 
@@ -79,6 +97,9 @@ esp_err_t flyback_psu_deinit(const flyback_psu_t *dev)
 esp_err_t flyback_psu_read(const flyback_psu_t *dev, uint8_t reg, uint8_t *dst, size_t len)
 {
     ESP_RETURN_ON_FALSE(dev && dst && len, ESP_ERR_INVALID_ARG, TAG, "bad args");
+
+    ESP_RETURN_ON_FALSE(bus_lock(s_i2c_bus_mtx, pdMS_TO_TICKS(FLYBACK_PSU_I2C_TIMEOUT_MS)), ESP_ERR_TIMEOUT, TAG, "i2c bus busy");
+
     size_t off = 0;
     while (off < len)
     {
@@ -88,11 +109,15 @@ esp_err_t flyback_psu_read(const flyback_psu_t *dev, uint8_t reg, uint8_t *dst, 
             &reg, 1,
             dst + off, chunk,
             pdMS_TO_TICKS(FLYBACK_PSU_I2C_TIMEOUT_MS));
-        if (e != ESP_OK)
+        if (e != ESP_OK){
+            bus_unlock(s_i2c_bus_mtx);
             return e;
+        }
         off += chunk;
         reg = (uint8_t)(reg + chunk); // Increment register address for next chunk
     }
+
+    bus_unlock(s_i2c_bus_mtx);
     return ESP_OK;
 }
 
@@ -109,6 +134,9 @@ esp_err_t flyback_psu_read(const flyback_psu_t *dev, uint8_t reg, uint8_t *dst, 
 esp_err_t flyback_psu_write(const flyback_psu_t *dev, uint8_t reg, const uint8_t *src, size_t len)
 {
     ESP_RETURN_ON_FALSE(dev && src && len, ESP_ERR_INVALID_ARG, TAG, "bad args");
+    
+    ESP_RETURN_ON_FALSE(bus_lock(s_i2c_bus_mtx, pdMS_TO_TICKS(FLYBACK_PSU_I2C_TIMEOUT_MS)), ESP_ERR_TIMEOUT, TAG, "i2c bus busy");
+    
     size_t off = 0;
     uint8_t buf[1 + 24]; // 1 byte for reg + up to 24 bytes payload
     while (off < len)
@@ -120,11 +148,15 @@ esp_err_t flyback_psu_write(const flyback_psu_t *dev, uint8_t reg, const uint8_t
             dev->port, dev->addr,
             buf, 1 + chunk,
             pdMS_TO_TICKS(FLYBACK_PSU_I2C_TIMEOUT_MS));
-        if (e != ESP_OK)
+        if (e != ESP_OK){
+            bus_unlock(s_i2c_bus_mtx);
             return e;
+        }
         off += chunk;
         reg = (uint8_t)(reg + chunk); // Increment register address for next chunk
     }
+
+    bus_unlock(s_i2c_bus_mtx);
     return ESP_OK;
 }
 

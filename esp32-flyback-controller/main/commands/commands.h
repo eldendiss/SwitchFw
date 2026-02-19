@@ -5,6 +5,7 @@
 #include "iot_is.h"
 
 bool delayCommand(const std::vector<double> &params);
+bool setIntervalCommand(const std::vector<double> &params);
 bool setTube_command(const std::vector<double> &params);
 bool setVoltage_r1_command(const std::vector<double> &params);
 bool setVoltage_r2_command(const std::vector<double> &params);
