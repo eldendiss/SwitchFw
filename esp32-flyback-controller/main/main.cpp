@@ -227,6 +227,9 @@ extern "C" void app_main(void)
     iotIs.send_data("rl", usvh, now);
     iotIs.send_data("voltage", hv_avg_get(), now);
     iotIs.send_data("samplerate", devCfg.interval, now);
+    uint8_t curCh = 0;
+    flyback_get_channel(&curCh);
+    iotIs.send_data("range", curCh, now);
     /*geiger_counter_pcnt_pause(&gc);
     flyback_disable();
     flyback_sleep();*/

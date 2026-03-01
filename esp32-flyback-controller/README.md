@@ -208,3 +208,7 @@ See [LICENSE](./LICENSE) for details.
 - [ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/)
 - [ESP32 RMT Peripheral](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/rmt.html)
 - AVR flyback PSU firmware documentation
+
+## Notes
+Lite: SDA=21, SCL=22
+Big: SDA=22, SCL=21
