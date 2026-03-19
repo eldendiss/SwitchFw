@@ -135,6 +135,9 @@ extern "C" void app_main(void)
   job_manager.register_command("setConversion_r2", setConversion_r2_command);
   job_manager.register_command("setConversion_r3", setConversion_r3_command);
   job_manager.register_command("setConversion_r4", setConversion_r4_command);
+  job_manager.register_command("reset", resetCommand);
+
+
 
   // Initialize flyback PSU device context
   esp_err_t ret = ESP_FAIL;
@@ -229,7 +232,12 @@ extern "C" void app_main(void)
     iotIs.send_data("samplerate", devCfg.interval, now);
     uint8_t curCh = 0;
     flyback_get_channel(&curCh);
-    iotIs.send_data("range", curCh, now);
+    iotIs.send_data("range", curCh+1, now);
+
+    char tag[8];
+    snprintf(tag,sizeof(tag),"r%d", curCh + 1);
+    iotIs.send_data(tag, usvh, now);
+
     /*geiger_counter_pcnt_pause(&gc);
     flyback_disable();
     flyback_sleep();*/

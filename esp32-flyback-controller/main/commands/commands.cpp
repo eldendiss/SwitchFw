@@ -8,6 +8,17 @@
 
 #include "../main.h"
 
+static void restartTask(void*){
+    vTaskDelay(4000 / portTICK_PERIOD_MS);
+    esp_restart();
+}
+
+bool resetCommand(const std::vector<double> &params)
+{
+    xTaskCreate(restartTask, "restart", 4096, NULL, 6, NULL);
+    return true;
+}
+
 bool delayCommand(const std::vector<double> &params)
 {
     if (params.empty())
