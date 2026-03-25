@@ -532,6 +532,46 @@ float geiger_counter_pcnt_get_sieverts_per_hour(geiger_counter_pcnt4_t *dev, uin
   return usvh;
 }
 
+esp_err_t geiger_counter_pcnt_get_cr_dr(geiger_counter_pcnt4_t *dev,
+                                        uint8_t range,
+                                        float *cr_out,
+                                        float *dr_out)
+{
+    if (!dev || range >= 4 || !cr_out || !dr_out)
+        return ESP_ERR_INVALID_ARG;
+
+    int64_t now = esp_timer_get_time();
+    float cr = 0.0f;
+    float dr = 0.0f;
+
+    portENTER_CRITICAL(&dev->mux);
+
+    uint64_t total_now = dev->total[range];
+    uint64_t total_prev = dev->last_total[range];
+    int64_t time_prev = dev->last_time_us[range];
+    float factor = dev->conversion_factors[range];
+
+    int64_t dt_us = now - time_prev;
+    uint64_t dcnt = (total_now >= total_prev) ? (total_now - total_prev) : total_now;
+
+    if (dt_us > 0)
+    {
+        float dt_s = (float)dt_us / 1000000.0f;
+        cr = ((float)dcnt / dt_s) * 60.0f;
+        dr = cr * factor;
+    }
+
+    dev->last_total[range] = total_now;
+    dev->last_time_us[range] = now;
+
+    portEXIT_CRITICAL(&dev->mux);
+
+    *cr_out = cr;
+    *dr_out = dr;
+
+    return ESP_OK;
+}
+
 esp_err_t geiger_counter_set_active_range(geiger_counter_pcnt4_t *dev, uint8_t range)
 {
   ESP_RETURN_ON_FALSE(dev, ESP_ERR_INVALID_ARG, "geiger", "dev null");

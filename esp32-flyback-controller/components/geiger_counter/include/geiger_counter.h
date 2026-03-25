@@ -89,6 +89,11 @@ esp_err_t geiger_counter_set_active_range(geiger_counter_pcnt4_t* dev, uint8_t r
 
 esp_err_t geiger_counter_set_conversion_factor(geiger_counter_pcnt4_t* dev, uint8_t range, float factor);
 
+esp_err_t geiger_counter_pcnt_get_cr_dr(geiger_counter_pcnt4_t *dev,
+                                        uint8_t range,
+                                        float *cr_out,
+                                        float *dr_out);
+
 #ifdef __cplusplus
 }
 #endif

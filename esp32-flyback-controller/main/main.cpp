@@ -168,7 +168,7 @@ extern "C" void app_main(void)
   // ESP_ERROR_CHECK(flyback_psu_send_command(&psu, FLYBACK_CMD_SAVE_CONFIG));
 
   // accept pulses >= 1000 ns (1 µs),
-  esp_err_t err = geiger_counter_pcnt_start(&gc, (gpio_num_t)CONFIG_RASENS_INTERRUPT_PIN, CONFIG_RASENS_INTERRUPT_PIN_ACTIVE_HIGH, 1000);
+  esp_err_t err = geiger_counter_pcnt_start(&gc, (gpio_num_t)CONFIG_RASENS_INTERRUPT_PIN, CONFIG_RASENS_INTERRUPT_PIN_ACTIVE_HIGH, 10000);
   if (err != ESP_OK)
   {
     ESP_LOGE(TAG, "Failed to start counter: %s", esp_err_to_name(err));
@@ -216,27 +216,31 @@ extern "C" void app_main(void)
     // Measure for 1 minute */
     // vTaskDelay(pdMS_TO_TICKS(60000));
     // Read Geiger counter statistics
-    float cps = geiger_counter_pcnt_get_cps(&gc, devCfg.active_range);
     float cpm = geiger_counter_pcnt_get_cpm(&gc, devCfg.active_range);
     float usvh = geiger_counter_pcnt_get_sieverts_per_hour(&gc, devCfg.active_range);
     uint64_t total = geiger_counter_pcnt_get_total(&gc, devCfg.active_range);
-    ESP_LOGI("GEIGER", "Counts: CPS=%.1f  CPM=%.1f uSv/h=%.3f Total=%llu", cps, cpm, usvh, (unsigned long long)total);
+    float cr = 0;
+    float dr = 0;
+    geiger_counter_pcnt_get_cr_dr(&gc, devCfg.active_range, &cr, &dr);
+    ESP_LOGI("GEIGER", "Counts: CPM=%.1f uSv/h=%.3f Total=%llu", cpm, usvh, (unsigned long long)total);
 
     // get current ts
     time_t now;
     time(&now);
-    iotIs.send_data("cps", cps, now);
-    iotIs.send_data("cpm", cpm, now);
-    iotIs.send_data("rl", usvh, now);
+    //iotIs.send_data("cps", cps, now);
+    iotIs.send_data("cr60", cpm, now);
+    iotIs.send_data("dr60", usvh, now);
+    iotIs.send_data("cr", cr, now);
+    iotIs.send_data("dr", dr, now);
     iotIs.send_data("voltage", hv_avg_get(), now);
     iotIs.send_data("samplerate", devCfg.interval, now);
     uint8_t curCh = 0;
     flyback_get_channel(&curCh);
     iotIs.send_data("range", curCh+1, now);
 
-    char tag[8];
+    /*char tag[8];
     snprintf(tag,sizeof(tag),"r%d", curCh + 1);
-    iotIs.send_data(tag, usvh, now);
+    iotIs.send_data(tag, usvh, now);*/
 
     /*geiger_counter_pcnt_pause(&gc);
     flyback_disable();
