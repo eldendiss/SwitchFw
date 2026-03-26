@@ -55,6 +55,7 @@ static void avg_u(void *p)
 extern "C" void app_main(void)
 {
 
+  ESP_LOGI(TAG, "Boot...");
   // initialize storage
   storage_init();
 
