@@ -169,7 +169,7 @@ extern "C" void app_main(void)
   // ESP_ERROR_CHECK(flyback_psu_send_command(&psu, FLYBACK_CMD_SAVE_CONFIG));
 
   // accept pulses >= 1000 ns (1 µs),
-  esp_err_t err = geiger_counter_pcnt_start(&gc, (gpio_num_t)CONFIG_RASENS_INTERRUPT_PIN, CONFIG_RASENS_INTERRUPT_PIN_ACTIVE_HIGH, 100);
+  esp_err_t err = geiger_counter_pcnt_start(&gc, (gpio_num_t)CONFIG_RASENS_INTERRUPT_PIN, CONFIG_RASENS_INTERRUPT_PIN_ACTIVE_HIGH, 500);
   if (err != ESP_OK)
   {
     ESP_LOGE(TAG, "Failed to start counter: %s", esp_err_to_name(err));
