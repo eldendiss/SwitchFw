@@ -440,51 +440,6 @@ uint64_t geiger_counter_pcnt_get_total(geiger_counter_pcnt4_t *dev, uint8_t rang
   return total;
 }
 
-float geiger_counter_pcnt_get_cps(geiger_counter_pcnt4_t *dev, uint8_t range)
-{
-  if (!dev || range >= 4)
-    return 0.0f;
-
-  int64_t now = esp_timer_get_time();
-  float cps = 0.0f;
-
-  portENTER_CRITICAL(&dev->mux);
-
-  // If the range is not currently active, CPS is defined as 0 (no pulses can arrive).
-  // This avoids misleading "stale CPS" from the last time the tube was active.
-  if (range != dev->active_range || !dev->running)
-  {
-    dev->last_cps[range] = 0.0f;
-    dev->last_total[range] = dev->total[range];
-    dev->last_time_us[range] = now;
-    portEXIT_CRITICAL(&dev->mux);
-    return 0.0f;
-  }
-
-  uint64_t total_now = dev->total[range];
-  uint64_t total_prev = dev->last_total[range];
-  int64_t time_prev = dev->last_time_us[range];
-
-  int64_t dt_us = now - time_prev;
-  uint64_t dcnt = total_now - total_prev;
-
-  if (dt_us > 0)
-  {
-    cps = (float)dcnt * (1000000.0f / (float)dt_us);
-    dev->last_cps[range] = cps;
-  }
-  else
-  {
-    cps = dev->last_cps[range];
-  }
-
-  dev->last_total[range] = total_now;
-  dev->last_time_us[range] = now;
-
-  portEXIT_CRITICAL(&dev->mux);
-  return cps;
-}
-
 float geiger_counter_pcnt_get_cpm(geiger_counter_pcnt4_t *dev, uint8_t range)
 {
   if (!dev || range >= 4)

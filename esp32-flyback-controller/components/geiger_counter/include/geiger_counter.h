@@ -76,9 +76,6 @@ esp_err_t geiger_counter_pcnt_resume(geiger_counter_pcnt4_t* dev);
 
 esp_err_t geiger_counter_pcnt_reset(geiger_counter_pcnt4_t* dev);
 
-/** CPS since prior call (first call returns 0) */
-float geiger_counter_pcnt_get_cps(geiger_counter_pcnt4_t* dev, uint8_t range);
-
 /** CPM rolling 60s window (scaled until filled) */
 float geiger_counter_pcnt_get_cpm(geiger_counter_pcnt4_t* dev, uint8_t range);
 

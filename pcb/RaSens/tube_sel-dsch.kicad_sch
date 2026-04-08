@@ -428,11 +428,12 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Diode:BA157"
+		(symbol "Diode:1N5819WS"
 			(pin_numbers
 				(hide yes)
 			)
 			(pin_names
+				(offset 1.016)
 				(hide yes)
 			)
 			(exclude_from_sim no)
@@ -446,7 +447,7 @@
 					)
 				)
 			)
-			(property "Value" "BA157"
+			(property "Value" "1N5819WS"
 				(at 0 -2.54 0)
 				(effects
 					(font
@@ -454,7 +455,7 @@
 					)
 				)
 			)
-			(property "Footprint" "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal"
+			(property "Footprint" "Diode_SMD:D_SOD-323"
 				(at 0 -4.445 0)
 				(effects
 					(font
@@ -463,7 +464,7 @@
 					(hide yes)
 				)
 			)
-			(property "Datasheet" "https://www.vishay.com/docs/88536/ba157.pdf"
+			(property "Datasheet" "https://datasheet.lcsc.com/lcsc/2204281430_Guangdong-Hottech-1N5819WS_C191023.pdf"
 				(at 0 0 0)
 				(effects
 					(font
@@ -472,7 +473,7 @@
 					(hide yes)
 				)
 			)
-			(property "Description" "400V 1A Fast recovery Rectifier Diode, DO-41"
+			(property "Description" "40V 600mV@1A 1A SOD-323 Schottky Barrier Diodes, SOD-323"
 				(at 0 0 0)
 				(effects
 					(font
@@ -481,7 +482,7 @@
 					(hide yes)
 				)
 			)
-			(property "Sim.Device" "D"
+			(property "ki_keywords" "diode Schottky"
 				(at 0 0 0)
 				(effects
 					(font
@@ -490,7 +491,7 @@
 					(hide yes)
 				)
 			)
-			(property "Sim.Pins" "1=K 2=A"
+			(property "ki_fp_filters" "D*SOD?323*"
 				(at 0 0 0)
 				(effects
 					(font
@@ -499,28 +500,10 @@
 					(hide yes)
 				)
 			)
-			(property "ki_keywords" "diode"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "ki_fp_filters" "D*DO?41*"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(symbol "BA157_0_1"
+			(symbol "1N5819WS_0_1"
 				(polyline
 					(pts
-						(xy -1.27 1.27) (xy -1.27 -1.27)
+						(xy -1.905 0.635) (xy -1.905 1.27) (xy -1.27 1.27) (xy -1.27 -1.27) (xy -0.635 -1.27) (xy -0.635 -0.635)
 					)
 					(stroke
 						(width 0.254)
@@ -555,7 +538,7 @@
 					)
 				)
 			)
-			(symbol "BA157_1_1"
+			(symbol "1N5819WS_1_1"
 				(pin passive line
 					(at -3.81 0 0)
 					(length 2.54)
@@ -897,7 +880,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Transistor_BJT:BC107"
+		(symbol "Transistor_BJT:MMBT2222A"
 			(pin_names
 				(offset 0)
 				(hide yes)
@@ -914,7 +897,7 @@
 					(justify left)
 				)
 			)
-			(property "Value" "BC107"
+			(property "Value" "MMBT2222A"
 				(at 5.08 0 0)
 				(effects
 					(font
@@ -923,7 +906,7 @@
 					(justify left)
 				)
 			)
-			(property "Footprint" "Package_TO_SOT_THT:TO-18-3"
+			(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
 				(at 5.08 -1.905 0)
 				(effects
 					(font
@@ -934,7 +917,7 @@
 					(hide yes)
 				)
 			)
-			(property "Datasheet" "http://www.b-kainka.de/Daten/Transistor/BC108.pdf"
+			(property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf"
 				(at 0 0 0)
 				(effects
 					(font
@@ -944,7 +927,7 @@
 					(hide yes)
 				)
 			)
-			(property "Description" "0.1A Ic, 50V Vce, Low Noise General Purpose NPN Transistor, TO-18"
+			(property "Description" "600mA Ic, 40V Vce, NPN Transistor, SOT-23"
 				(at 0 0 0)
 				(effects
 					(font
@@ -953,7 +936,7 @@
 					(hide yes)
 				)
 			)
-			(property "ki_keywords" "NPN low noise transistor"
+			(property "Sim.Device" "NPN"
 				(at 0 0 0)
 				(effects
 					(font
@@ -962,7 +945,7 @@
 					(hide yes)
 				)
 			)
-			(property "ki_fp_filters" "TO?18*"
+			(property "Sim.Pins" "1=B 2=E 3=C"
 				(at 0 0 0)
 				(effects
 					(font
@@ -971,7 +954,25 @@
 					(hide yes)
 				)
 			)
-			(symbol "BC107_0_1"
+			(property "ki_keywords" "NPN Transistor"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_fp_filters" "SOT?23*"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "MMBT2222A_0_1"
 				(polyline
 					(pts
 						(xy -2.54 0) (xy 0.635 0)
@@ -1008,7 +1009,7 @@
 					)
 				)
 			)
-			(symbol "BC107_1_1"
+			(symbol "MMBT2222A_1_1"
 				(polyline
 					(pts
 						(xy 0.635 0.635) (xy 2.54 2.54)
@@ -1055,7 +1056,7 @@
 							)
 						)
 					)
-					(number "2"
+					(number "1"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -1091,7 +1092,7 @@
 							)
 						)
 					)
-					(number "1"
+					(number "2"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -2539,17 +2540,17 @@
 		)
 	)
 	(symbol
-		(lib_id "Transistor_BJT:BC107")
-		(at 175.26 95.25 0)
-		(mirror y)
+		(lib_id "Diode:1N5819WS")
+		(at 152.4 101.6 270)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(uuid "30932e2f-549e-4976-a01b-10658373304d")
-		(property "Reference" "Q12"
-			(at 170.18 96.5201 0)
+		(fields_autoplaced yes)
+		(uuid "2eae232d-8658-4cce-ad35-c24da06ef55f")
+		(property "Reference" "D3"
+			(at 154.94 100.0124 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2557,8 +2558,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "2N2222A"
-			(at 170.18 93.9801 0)
+		(property "Value" "1N5819WS"
+			(at 154.94 102.5524 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2566,29 +2567,8 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_TO_SOT_THT:TO-92L_Inline"
-			(at 170.18 97.155 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://www.b-kainka.de/Daten/Transistor/BC108.pdf"
-			(at 175.26 95.25 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-		(property "Description" "0.1A Ic, 50V Vce, Low Noise General Purpose NPN Transistor, TO-18"
-			(at 175.26 95.25 0)
+		(property "Footprint" "Diode_SMD:D_SOD-323"
+			(at 147.955 101.6 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2596,19 +2576,34 @@
 				(hide yes)
 			)
 		)
-		(pin "1"
-			(uuid "d6a19449-efba-488c-ac29-17705ba65a04")
+		(property "Datasheet" "https://datasheet.lcsc.com/lcsc/2204281430_Guangdong-Hottech-1N5819WS_C191023.pdf"
+			(at 152.4 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "40V 600mV@1A 1A SOD-323 Schottky Barrier Diodes, SOD-323"
+			(at 152.4 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
 		)
 		(pin "2"
-			(uuid "5734ca30-ba0f-4f62-88a7-d7e993a82441")
+			(uuid "ef480504-7bdf-45d7-9d72-7eed882c3ea5")
 		)
-		(pin "3"
-			(uuid "2ec89888-9f90-46e8-84d5-2dc5ba8a7f3d")
+		(pin "1"
+			(uuid "1b2cce38-2b2d-4696-ab8d-121d9713f125")
 		)
 		(instances
 			(project "RaSens"
 				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
-					(reference "Q12")
+					(reference "D3")
 					(unit 1)
 				)
 			)
@@ -2674,6 +2669,76 @@
 			(project "RaSens"
 				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
 					(reference "#PWR030")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Diode:1N5819WS")
+		(at 152.4 66.04 270)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "3952e187-9c71-4c59-9679-ed2d212ec77e")
+		(property "Reference" "D5"
+			(at 154.94 64.4524 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "1N5819WS"
+			(at 154.94 66.9924 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_SOD-323"
+			(at 147.955 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://datasheet.lcsc.com/lcsc/2204281430_Guangdong-Hottech-1N5819WS_C191023.pdf"
+			(at 152.4 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "40V 600mV@1A 1A SOD-323 Schottky Barrier Diodes, SOD-323"
+			(at 152.4 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "5aa5b5ec-3d8d-406e-9640-24d7d69a82c6")
+		)
+		(pin "1"
+			(uuid "0e79e3e6-2624-472c-af33-000f5ea9512c")
+		)
+		(instances
+			(project "RaSens"
+				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
+					(reference "D5")
 					(unit 1)
 				)
 			)
@@ -2748,17 +2813,17 @@
 		)
 	)
 	(symbol
-		(lib_id "Transistor_BJT:BC107")
-		(at 175.26 113.03 0)
-		(mirror y)
+		(lib_id "Diode:1N5819WS")
+		(at 152.4 119.38 270)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(uuid "4927f8d5-9da2-45ff-9104-50e90d7f008f")
-		(property "Reference" "Q13"
-			(at 170.18 114.3001 0)
+		(fields_autoplaced yes)
+		(uuid "4769eaf9-b2a7-4da2-853d-c5ce946e6b2f")
+		(property "Reference" "D1"
+			(at 154.94 117.7924 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2766,8 +2831,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "2N2222A"
-			(at 170.18 111.7601 0)
+		(property "Value" "1N5819WS"
+			(at 154.94 120.3324 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2775,29 +2840,8 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_TO_SOT_THT:TO-92L_Inline"
-			(at 170.18 114.935 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://www.b-kainka.de/Daten/Transistor/BC108.pdf"
-			(at 175.26 113.03 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-		(property "Description" "0.1A Ic, 50V Vce, Low Noise General Purpose NPN Transistor, TO-18"
-			(at 175.26 113.03 0)
+		(property "Footprint" "Diode_SMD:D_SOD-323"
+			(at 147.955 119.38 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2805,95 +2849,34 @@
 				(hide yes)
 			)
 		)
-		(pin "1"
-			(uuid "d04ac25e-4ae9-434d-b415-101fc5f90c2b")
+		(property "Datasheet" "https://datasheet.lcsc.com/lcsc/2204281430_Guangdong-Hottech-1N5819WS_C191023.pdf"
+			(at 152.4 119.38 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "40V 600mV@1A 1A SOD-323 Schottky Barrier Diodes, SOD-323"
+			(at 152.4 119.38 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
 		)
 		(pin "2"
-			(uuid "11bb8629-5264-4517-9db5-6c7b742dfba3")
+			(uuid "2c13e632-9acc-4a3b-acee-5c113672c298")
 		)
-		(pin "3"
-			(uuid "267e0341-a18a-47ab-a172-597769e30f60")
+		(pin "1"
+			(uuid "62a6b2bc-929f-4452-9235-456c05aa7478")
 		)
 		(instances
 			(project "RaSens"
 				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
-					(reference "Q13")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Transistor_BJT:BC107")
-		(at 175.26 130.81 0)
-		(mirror y)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "59282894-86e7-410c-b1cb-9e049d5dd4d1")
-		(property "Reference" "Q14"
-			(at 170.18 132.0801 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "2N2222A"
-			(at 170.18 129.5401 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Package_TO_SOT_THT:TO-92L_Inline"
-			(at 170.18 132.715 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://www.b-kainka.de/Daten/Transistor/BC108.pdf"
-			(at 175.26 130.81 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-		(property "Description" "0.1A Ic, 50V Vce, Low Noise General Purpose NPN Transistor, TO-18"
-			(at 175.26 130.81 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "a10f8e9d-6ce4-4000-91e4-938db2a5836e")
-		)
-		(pin "2"
-			(uuid "ec802114-da05-4167-824a-c05447cb6042")
-		)
-		(pin "3"
-			(uuid "9d5cb2ef-7463-468a-be8d-f1531030fc28")
-		)
-		(instances
-			(project "RaSens"
-				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
-					(reference "Q14")
+					(reference "D1")
 					(unit 1)
 				)
 			)
@@ -3030,6 +3013,101 @@
 		)
 	)
 	(symbol
+		(lib_id "Transistor_BJT:MMBT2222A")
+		(at 175.26 113.03 0)
+		(mirror y)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "61a44b88-738c-44e8-8d7a-9c70e8d43dcb")
+		(property "Reference" "Q3"
+			(at 170.18 111.7599 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "MMBT2222A"
+			(at 170.18 114.2999 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
+			(at 170.18 114.935 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(italic yes)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf"
+			(at 175.26 113.03 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Description" "600mA Ic, 40V Vce, NPN Transistor, SOT-23"
+			(at 175.26 113.03 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Device" "NPN"
+			(at 175.26 113.03 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Pins" "1=B 2=E 3=C"
+			(at 175.26 113.03 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "6afbacb5-0cde-4281-87cd-f510e09d44e2")
+		)
+		(pin "1"
+			(uuid "81424fca-d4b0-4700-8d3f-34727c76309b")
+		)
+		(pin "2"
+			(uuid "e7fc6f5e-ea1e-4958-9591-5b9dd1e6c0e1")
+		)
+		(instances
+			(project "RaSens"
+				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
+					(reference "Q3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Connector:Screw_Terminal_01x04")
 		(at 99.06 97.79 180)
 		(unit 1)
@@ -3103,17 +3181,18 @@
 		)
 	)
 	(symbol
-		(lib_id "Diode:BA157")
-		(at 152.4 66.04 270)
+		(lib_id "Transistor_BJT:MMBT2222A")
+		(at 175.26 95.25 0)
+		(mirror y)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "859be330-4a4d-497f-a47e-c5697a4aacb1")
-		(property "Reference" "D22"
-			(at 154.94 64.7699 90)
+		(uuid "69241ae7-ec0f-4456-b00f-509b194acf86")
+		(property "Reference" "Q2"
+			(at 170.18 93.9799 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3121,8 +3200,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "UF4007"
-			(at 154.94 67.3099 90)
+		(property "Value" "MMBT2222A"
+			(at 170.18 96.5199 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3130,8 +3209,29 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal"
-			(at 147.955 66.04 0)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
+			(at 170.18 97.155 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(italic yes)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf"
+			(at 175.26 95.25 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Description" "600mA Ic, 40V Vce, NPN Transistor, SOT-23"
+			(at 175.26 95.25 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3139,8 +3239,8 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "https://www.vishay.com/docs/88536/ba157.pdf"
-			(at 152.4 66.04 0)
+		(property "Sim.Device" "NPN"
+			(at 175.26 95.25 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3148,8 +3248,8 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "400V 1A Fast recovery Rectifier Diode, DO-41"
-			(at 152.4 66.04 0)
+		(property "Sim.Pins" "1=B 2=E 3=C"
+			(at 175.26 95.25 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3157,34 +3257,114 @@
 				(hide yes)
 			)
 		)
-		(property "Sim.Device" "D"
-			(at 152.4 66.04 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Sim.Pins" "1=K 2=A"
-			(at 152.4 66.04 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
+		(pin "3"
+			(uuid "059ea04d-b863-4985-9352-a71bc980c302")
 		)
 		(pin "1"
-			(uuid "7c0356a5-079d-4196-b283-0934dd263d69")
+			(uuid "fbd6b90f-4e4e-459c-89da-20532515660a")
 		)
 		(pin "2"
-			(uuid "decede57-9900-4f1d-b3ac-f57ac93e3698")
+			(uuid "668b2fc5-9b43-4969-9527-9e9b19a0c13b")
 		)
 		(instances
 			(project "RaSens"
 				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
-					(reference "D22")
+					(reference "Q2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Transistor_BJT:MMBT2222A")
+		(at 175.26 130.81 0)
+		(mirror y)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "74e1521c-1445-49b5-840d-4bc163222ffa")
+		(property "Reference" "Q4"
+			(at 170.18 129.5399 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "MMBT2222A"
+			(at 170.18 132.0799 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
+			(at 170.18 132.715 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(italic yes)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf"
+			(at 175.26 130.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Description" "600mA Ic, 40V Vce, NPN Transistor, SOT-23"
+			(at 175.26 130.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Device" "NPN"
+			(at 175.26 130.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Pins" "1=B 2=E 3=C"
+			(at 175.26 130.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "54de02fe-23ab-4f9b-a793-309c147d0c1f")
+		)
+		(pin "1"
+			(uuid "5a34a0e1-67cf-4bbb-a509-08bc8c1b9cd9")
+		)
+		(pin "2"
+			(uuid "56cb0182-981a-4f86-808b-ed1f8cf6c0e6")
+		)
+		(instances
+			(project "RaSens"
+				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
+					(reference "Q4")
 					(unit 1)
 				)
 			)
@@ -3250,6 +3430,76 @@
 			(project "RaSens"
 				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
 					(reference "#PWR035")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Diode:1N5819WS")
+		(at 152.4 83.82 270)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "8d7b48ec-a8da-43ea-9b26-132982fd33de")
+		(property "Reference" "D4"
+			(at 154.94 82.2324 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "1N5819WS"
+			(at 154.94 84.7724 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_SOD-323"
+			(at 147.955 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://datasheet.lcsc.com/lcsc/2204281430_Guangdong-Hottech-1N5819WS_C191023.pdf"
+			(at 152.4 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "40V 600mV@1A 1A SOD-323 Schottky Barrier Diodes, SOD-323"
+			(at 152.4 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "4adb2d70-f2f7-420b-b37e-1a4dd9d5ba91")
+		)
+		(pin "1"
+			(uuid "4477fef7-99bc-4a55-a82b-f07cbd654514")
+		)
+		(instances
+			(project "RaSens"
+				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
+					(reference "D4")
 					(unit 1)
 				)
 			)
@@ -3326,6 +3576,101 @@
 			(project "RaSens"
 				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
 					(reference "K4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Transistor_BJT:MMBT2222A")
+		(at 175.26 77.47 0)
+		(mirror y)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "92053b8a-c748-471c-b369-49eb7afef1fe")
+		(property "Reference" "Q1"
+			(at 170.18 76.1999 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "MMBT2222A"
+			(at 170.18 78.7399 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
+			(at 170.18 79.375 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(italic yes)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf"
+			(at 175.26 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Description" "600mA Ic, 40V Vce, NPN Transistor, SOT-23"
+			(at 175.26 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Device" "NPN"
+			(at 175.26 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Pins" "1=B 2=E 3=C"
+			(at 175.26 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "4beed8be-9671-4867-985d-262ccafb00c7")
+		)
+		(pin "1"
+			(uuid "7bac8639-643f-47bd-b39b-08f163f0eafb")
+		)
+		(pin "2"
+			(uuid "e5e576c3-140a-4c2e-b2ee-f6ab139c1823")
+		)
+		(instances
+			(project ""
+				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
+					(reference "Q1")
 					(unit 1)
 				)
 			)
@@ -3470,182 +3815,6 @@
 			(project "RaSens"
 				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
 					(reference "R31")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Diode:BA157")
-		(at 152.4 83.82 270)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "a5d2789f-32b6-456d-9206-b1cd9843536e")
-		(property "Reference" "D21"
-			(at 154.94 82.5499 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "UF4007"
-			(at 154.94 85.0899 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal"
-			(at 147.955 83.82 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "https://www.vishay.com/docs/88536/ba157.pdf"
-			(at 152.4 83.82 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "400V 1A Fast recovery Rectifier Diode, DO-41"
-			(at 152.4 83.82 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Sim.Device" "D"
-			(at 152.4 83.82 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Sim.Pins" "1=K 2=A"
-			(at 152.4 83.82 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "b61f6fda-241d-4628-b7da-5c79a689e785")
-		)
-		(pin "2"
-			(uuid "178a3d36-61ae-4972-9238-786a6d7e39c5")
-		)
-		(instances
-			(project "RaSens"
-				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
-					(reference "D21")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Diode:BA157")
-		(at 152.4 101.6 270)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "a684c505-6f19-488a-bf37-e8856d465996")
-		(property "Reference" "D20"
-			(at 154.94 100.3299 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "UF4007"
-			(at 154.94 102.8699 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal"
-			(at 147.955 101.6 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "https://www.vishay.com/docs/88536/ba157.pdf"
-			(at 152.4 101.6 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "400V 1A Fast recovery Rectifier Diode, DO-41"
-			(at 152.4 101.6 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Sim.Device" "D"
-			(at 152.4 101.6 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Sim.Pins" "1=K 2=A"
-			(at 152.4 101.6 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "7348b130-ec16-4940-8cbf-d4f1fb08db82")
-		)
-		(pin "2"
-			(uuid "46c4b4d5-eacb-4ebb-a952-c805320a66e7")
-		)
-		(instances
-			(project "RaSens"
-				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
-					(reference "D20")
 					(unit 1)
 				)
 			)
@@ -4064,170 +4233,6 @@
 			(project "RaSens"
 				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
 					(reference "#PWR037")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Transistor_BJT:BC107")
-		(at 175.26 77.47 0)
-		(mirror y)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "ec21ff6b-5b21-408d-9b5e-680440392c00")
-		(property "Reference" "Q11"
-			(at 170.18 78.7401 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "2N2222A"
-			(at 170.18 76.2001 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Package_TO_SOT_THT:TO-92L_Inline"
-			(at 170.18 79.375 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://www.b-kainka.de/Daten/Transistor/BC108.pdf"
-			(at 175.26 77.47 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-		(property "Description" "0.1A Ic, 50V Vce, Low Noise General Purpose NPN Transistor, TO-18"
-			(at 175.26 77.47 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "411e498b-dcff-45ad-8966-be9daeddf0ad")
-		)
-		(pin "2"
-			(uuid "d2f317f4-a25c-434c-8b69-989aa7e19f3e")
-		)
-		(pin "3"
-			(uuid "2e903bee-c9cf-42be-bec9-1e8495b63e57")
-		)
-		(instances
-			(project "RaSens"
-				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
-					(reference "Q11")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Diode:BA157")
-		(at 152.4 119.38 270)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "f2ce0207-88d0-4164-9d6e-2704c235183e")
-		(property "Reference" "D16"
-			(at 154.94 118.1099 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "UF4007"
-			(at 154.94 120.6499 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal"
-			(at 147.955 119.38 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "https://www.vishay.com/docs/88536/ba157.pdf"
-			(at 152.4 119.38 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "400V 1A Fast recovery Rectifier Diode, DO-41"
-			(at 152.4 119.38 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Sim.Device" "D"
-			(at 152.4 119.38 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Sim.Pins" "1=K 2=A"
-			(at 152.4 119.38 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "872100ac-c6f6-404f-92ac-0478ec7ba1c9")
-		)
-		(pin "2"
-			(uuid "1c4c40f7-76b2-4a4b-b3a0-fe5080ef0109")
-		)
-		(instances
-			(project "RaSens"
-				(path "/5a813425-ce65-4d1a-8158-1ddcc9c68fab/a72a4011-512c-4272-a415-526fd562b340"
-					(reference "D16")
 					(unit 1)
 				)
 			)

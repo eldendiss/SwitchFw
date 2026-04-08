@@ -48,7 +48,7 @@
         "silk_text_thickness": 0.1524,
         "silk_text_upright": false,
         "zones": {
-          "min_clearance": 0.0
+          "min_clearance": 0.127
         }
       },
       "diff_pair_dimensions": [
@@ -491,14 +491,14 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "RaSens.kicad_pro",
+    "filename": "ESP_RS.kicad_pro",
     "version": 3
   },
   "net_settings": {
     "classes": [
       {
         "bus_width": 12,
-        "clearance": 0.09,
+        "clearance": 0.2,
         "diff_pair_gap": 0.25,
         "diff_pair_via_gap": 0.25,
         "diff_pair_width": 0.2,
@@ -509,53 +509,17 @@
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 2147483647,
         "schematic_color": "rgba(0, 0, 0, 0.000)",
-        "track_width": 0.09,
-        "via_diameter": 0.4,
-        "via_drill": 0.2,
+        "track_width": 0.2,
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
         "wire_width": 6
-      },
-      {
-        "clearance": 1.0,
-        "name": "HV",
-        "pcb_color": "rgba(0, 0, 0, 0.000)",
-        "priority": 0,
-        "schematic_color": "rgba(0, 0, 0, 0.000)",
-        "wire_width": 12
       }
     ],
     "meta": {
       "version": 4
     },
     "net_colors": null,
-    "netclass_assignments": {
-      "/tube_sel-dsch/TUBE+": [
-        "HV"
-      ],
-      "Net-(C7-Pad1)": [
-        "HV"
-      ],
-      "Net-(D2-A)": [
-        "HV"
-      ],
-      "Net-(D2-K)": [
-        "HV"
-      ],
-      "Net-(D24-K)": [
-        "HV"
-      ],
-      "Net-(J1-Pin_1)": [
-        "HV"
-      ],
-      "Net-(J1-Pin_2)": [
-        "HV"
-      ],
-      "Net-(J1-Pin_3)": [
-        "HV"
-      ],
-      "Net-(J1-Pin_4)": [
-        "HV"
-      ]
-    },
+    "netclass_assignments": null,
     "netclass_patterns": []
   },
   "pcbnew": {
@@ -566,7 +530,7 @@
       "plot": "",
       "pos_files": "",
       "specctra_dsn": "",
-      "step": "RaSens.step",
+      "step": "",
       "svg": "",
       "vrml": ""
     },
@@ -672,7 +636,7 @@
     "meta": {
       "version": 1
     },
-    "net_format_name": "KiCad",
+    "net_format_name": "",
     "page_layout_descr_file": "",
     "plot_directory": "",
     "space_save_all_events": true,
@@ -687,12 +651,12 @@
   },
   "sheets": [
     [
-      "5a813425-ce65-4d1a-8158-1ddcc9c68fab",
+      "93d061f2-6f7b-411e-8786-889667880847",
       "Root"
     ],
     [
-      "a72a4011-512c-4272-a415-526fd562b340",
-      "tube_sel-dsch"
+      "fb5fa99f-6989-4a26-ab67-683cbfba9dd4",
+      "ETH"
     ]
   ],
   "text_variables": {}
