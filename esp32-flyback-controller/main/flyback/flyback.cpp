@@ -23,15 +23,7 @@ static float voltage_table[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 static geiger_counter_pcnt4_t *gc_dev = nullptr;
 
 esp_err_t flyback_init()
-{
-    gpio_config_t io_conf = {};
-    io_conf.pin_bit_mask = ((1ULL << CONFIG_RASENS_ENABLE_PIN) | (1ULL << CONFIG_RASENS_SLEEP_PIN));
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    gpio_config(&io_conf);
-    
+{    
     // initialize enable pin
     gpio_set_level((gpio_num_t)CONFIG_RASENS_ENABLE_PIN, 0); // Disable PSU by setting pin LOW
 

@@ -56,6 +56,16 @@ static void avg_u(void *p)
 
 extern "C" void app_main(void)
 {
+  gpio_config_t io_conf = {};
+  io_conf.pin_bit_mask = ((1ULL << CONFIG_RASENS_ENABLE_PIN) | (1ULL << CONFIG_RASENS_SLEEP_PIN));
+  io_conf.mode = GPIO_MODE_OUTPUT;
+  io_conf.intr_type = GPIO_INTR_DISABLE;
+  io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+  io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+  gpio_config(&io_conf);
+  //disable flyback by default on boot for safety
+  gpio_set_level((gpio_num_t)CONFIG_RASENS_SLEEP_PIN, 0);
+  gpio_set_level((gpio_num_t)CONFIG_RASENS_ENABLE_PIN, 0);
 
   ESP_LOGI(TAG, "Boot...");
   // initialize storage
@@ -63,7 +73,6 @@ extern "C" void app_main(void)
 
   // mark app as valid to avoid rollback
   mark_app_valid_cancel_rollback();
-
 
   ble_init();
   uint8_t mac[6];
@@ -144,8 +153,6 @@ extern "C" void app_main(void)
   job_manager.register_command("setConversion_r3", setConversion_r3_command);
   job_manager.register_command("setConversion_r4", setConversion_r4_command);
   job_manager.register_command("reset", resetCommand);
-
-
 
   // Initialize flyback PSU device context
   esp_err_t ret = ESP_FAIL;
@@ -235,7 +242,7 @@ extern "C" void app_main(void)
     // get current ts
     time_t now;
     time(&now);
-    //iotIs.send_data("cps", cps, now);
+    // iotIs.send_data("cps", cps, now);
     iotIs.send_data("cr60", cpm, now);
     iotIs.send_data("dr60", usvh, now);
     iotIs.send_data("cr", cr, now);
@@ -244,7 +251,7 @@ extern "C" void app_main(void)
     iotIs.send_data("samplerate", devCfg.interval, now);
     uint8_t curCh = 0;
     flyback_get_channel(&curCh);
-    iotIs.send_data("range", curCh+1, now);
+    iotIs.send_data("range", curCh + 1, now);
 
     /*char tag[8];
     snprintf(tag,sizeof(tag),"r%d", curCh + 1);
