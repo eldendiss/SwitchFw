@@ -16,3 +16,4 @@ dependencies:
   #   public: true
   espressif/esp-idf-cxx: ^1.0.2-beta
   espressif/mqtt: ^1.0.0
+  espressif/mdns: ^1.11.0

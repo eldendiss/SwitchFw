@@ -9,6 +9,7 @@
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
+static bool eth_connected = false;
 
 static void event_handler(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data)
@@ -46,12 +47,6 @@ esp_err_t wifi_init(void)
     // Create FreeRTOS event group to signal Wi-Fi events
     s_wifi_event_group = xEventGroupCreate();
     if (!s_wifi_event_group) return ESP_ERR_NO_MEM;
-
-    // Initialize the TCP/IP stack
-    ESP_ERROR_CHECK(esp_netif_init());
-
-    // Create default event loop
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     // Create default network interface for station mode
     esp_netif_create_default_wifi_sta();
@@ -98,6 +93,19 @@ esp_err_t wifi_init(void)
     return err;
 }
 
+void eth_connected_override(void)
+{
+    // Set connected bit in event group to bypass WiFi connection logic
+    xEventGroupSetBits(s_wifi_event_group, WIFI_EVT_CONNECTED_BIT);
+    eth_connected = true;
+}
+
+void eth_disconnected_override(void)
+{
+    eth_connected = false;
+}
+
+
 void wifi_reset_state(void)
 {
     s_retry_num = 0;
@@ -139,6 +147,9 @@ esp_err_t wifi_wait_connected(TickType_t ticks_to_wait)
 
 bool wifi_is_connected()
 {
+    if (eth_connected) {
+        return true;
+    }
     EventBits_t bits = xEventGroupGetBits(s_wifi_event_group);
     return (bits & WIFI_EVT_CONNECTED_BIT) != 0;
 }

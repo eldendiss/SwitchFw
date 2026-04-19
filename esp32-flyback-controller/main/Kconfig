@@ -88,4 +88,32 @@ menu "RaSens"
         default 42
         help 
           "I2C address of the RaSens device."
+
+    config RASENS_DHCP
+        bool "Enable DHCP"
+        default y
+        help 
+          "Enable or disable DHCP for IP address assignment."
+
+    config RASENS_STATIC_IP_BASE
+        string "Static IP Address Base"
+        depends on !RASENS_DHCP
+        default "192.168.1."
+        help 
+          "Base for static IP address assignment. The last octet will be determined by the device's MAC address."
+
+    config RASENS_GATEWAY
+        string "Gateway IP Address"
+        depends on !RASENS_DHCP
+        default "192.168.1.1"
+        help 
+          "Gateway IP address for the network."
+
+    config RASENS_NETMASK
+        string "Netmask"
+        depends on !RASENS_DHCP
+        default "255.255.255.0"
+        help 
+          "Network mask for the IP address."
+
 endmenu

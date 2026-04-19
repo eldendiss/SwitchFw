@@ -17,6 +17,8 @@
 #include "ble.h"
 #include "provisioning.h"
 #include "hv_mon.h"
+#include "LAN.h"
+#include "esp_mac.h"
 
 static const char *TAG = "main";
 
@@ -62,7 +64,12 @@ extern "C" void app_main(void)
   // mark app as valid to avoid rollback
   mark_app_valid_cancel_rollback();
 
+
   ble_init();
+  uint8_t mac[6];
+  esp_read_mac(mac, ESP_MAC_BT);
+  LAN_init();
+  register_got_ip_callback(eth_connected_override);
 
   // initialize wifi
   wifi_init();
