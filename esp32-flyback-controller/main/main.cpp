@@ -63,7 +63,7 @@ extern "C" void app_main(void)
   io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
   io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
   gpio_config(&io_conf);
-  //disable flyback by default on boot for safety
+  // disable flyback by default on boot for safety
   gpio_set_level((gpio_num_t)CONFIG_RASENS_SLEEP_PIN, 0);
   gpio_set_level((gpio_num_t)CONFIG_RASENS_ENABLE_PIN, 0);
 
@@ -76,7 +76,6 @@ extern "C" void app_main(void)
 
   register_got_ip_callback(eth_connected_override);
   register_down_callback(eth_disconnected_override);
-
 
   ble_init();
   uint8_t mac[6];
@@ -251,22 +250,32 @@ extern "C" void app_main(void)
     time_t now;
     time(&now);
     // iotIs.send_data("cps", cps, now);
-    iotIs.send_data("cr60", cpm, now);
-    iotIs.send_data("dr60", usvh, now);
-    iotIs.send_data("cr", cr, now);
-    iotIs.send_data("dr", dr, now);
-    iotIs.send_data("voltage", hv_avg_get(), now);
-    iotIs.send_data("samplerate", devCfg.interval, now);
+    
     uint8_t curCh = 0;
     flyback_get_channel(&curCh);
-    iotIs.send_data("range", curCh + 1, now);
 
-    /*char tag[8];
-    snprintf(tag,sizeof(tag),"r%d", curCh + 1);
-    iotIs.send_data(tag, usvh, now);*/
-
-    /*geiger_counter_pcnt_pause(&gc);
-    flyback_disable();
-    flyback_sleep();*/
+    if (iotIs.can_publish())
+    {
+      if (!iotIs.send_data("cr60", cpm, now))
+        goto mqtt_publish_fail;
+      if (!iotIs.send_data("dr60", usvh, now))
+        goto mqtt_publish_fail;
+      if (!iotIs.send_data("cr", cr, now))
+        goto mqtt_publish_fail;
+      if (!iotIs.send_data("dr", dr, now))
+        goto mqtt_publish_fail;
+      if (!iotIs.send_data("voltage", hv_avg_get(), now))
+        goto mqtt_publish_fail;
+      if (!iotIs.send_data("samplerate", devCfg.interval, now))
+        goto mqtt_publish_fail;
+      if (!iotIs.send_data("range", curCh + 1, now))
+        goto mqtt_publish_fail;
+    }
+    else
+    {
+      ESP_LOGW(TAG, "MQTT not connected, dropping telemetry batch");
+    }
+    mqtt_publish_fail:
+    ;
   }
 }
