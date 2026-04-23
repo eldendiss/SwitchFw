@@ -16,6 +16,7 @@ bool setConversion_r1_command(const std::vector<double> &params);
 bool setConversion_r2_command(const std::vector<double> &params);
 bool setConversion_r3_command(const std::vector<double> &params);
 bool setConversion_r4_command(const std::vector<double> &params);
+bool factoryResetCommand(const std::vector<double> &params);
 
 
 #endif // COMMANDS_H_

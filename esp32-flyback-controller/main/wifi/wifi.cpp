@@ -154,6 +154,16 @@ void wifi_reset_state(void)
     set_connected_bit_if_needed();
 }
 
+bool wifi_sta_is_connected(void)
+{
+    return s_wifi_connected;
+}
+
+bool eth_is_connected(void)
+{
+    return s_eth_connected;
+}
+
 esp_err_t wifi_connect_async(const char *ssid, const char *password)
 {
     if (!ssid)

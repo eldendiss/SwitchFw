@@ -17,6 +17,9 @@ void eth_connected_override(void);
 
 void eth_disconnected_override(void);
 
+bool wifi_sta_is_connected(void);
+bool eth_is_connected(void);
+
 // Start a connection attempt (non-blocking). Does NOT wait.
 esp_err_t wifi_connect_async(const char *ssid, const char *password);
 

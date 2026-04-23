@@ -5,6 +5,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "hv_mon.h"
+#include "storage.h"
 
 #include "../main.h"
 
@@ -238,5 +239,25 @@ bool setConversion_r4_command(const std::vector<double> &params)
 
     devCfg.coeff[3] = static_cast<uint32_t>(params[0] * 10000.0f);
     storage_save_device_config_data(&devCfg);
+    return true;
+}
+
+bool factoryResetCommand(const std::vector<double> &params)
+{
+    (void)params;
+
+    provisioning_data_t cfg = {0};
+    if (storage_load_provisioning_data(&cfg) != ESP_OK) {
+        return false;
+    }
+
+    memset(cfg.ssid, 0, sizeof(cfg.ssid));
+    memset(cfg.password, 0, sizeof(cfg.password));
+
+    if (storage_save_provisioning_data(&cfg) != ESP_OK) {
+        return false;
+    }
+
+    xTaskCreate(restartTask, "restart", 4096, NULL, 6, NULL);
     return true;
 }

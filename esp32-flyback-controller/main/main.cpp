@@ -160,6 +160,8 @@ extern "C" void app_main(void)
   job_manager.register_command("setConversion_r3", setConversion_r3_command);
   job_manager.register_command("setConversion_r4", setConversion_r4_command);
   job_manager.register_command("reset", resetCommand);
+  job_manager.register_command("factoryReset", factoryResetCommand);
+
 
   // Initialize flyback PSU device context
   esp_err_t ret = ESP_FAIL;
@@ -253,6 +255,12 @@ extern "C" void app_main(void)
     
     uint8_t curCh = 0;
     flyback_get_channel(&curCh);
+    int iface = 0;
+    if (eth_is_connected()) {
+        iface = 2;
+    } else if (wifi_sta_is_connected()) {
+        iface = 1;
+    }
 
     if (iotIs.can_publish())
     {
@@ -269,6 +277,8 @@ extern "C" void app_main(void)
       if (!iotIs.send_data("samplerate", devCfg.interval, now))
         goto mqtt_publish_fail;
       if (!iotIs.send_data("range", curCh + 1, now))
+        goto mqtt_publish_fail;
+      if (!iotIs.send_data("iface", iface, now))
         goto mqtt_publish_fail;
     }
     else
