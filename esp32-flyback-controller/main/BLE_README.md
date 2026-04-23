@@ -27,6 +27,7 @@ Each service characteristic uses the last 2 bytes for identification. For simpli
 ```
 
 Each characteristics also has permissions and properties, see BLE documentation for more info about these. There is also an option of encrypted read/write, which allow operation only after devices are bonded.
+Test
 
 Defined services (later will be extended further):
 
