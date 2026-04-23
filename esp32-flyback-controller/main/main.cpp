@@ -74,11 +74,14 @@ extern "C" void app_main(void)
   // mark app as valid to avoid rollback
   mark_app_valid_cancel_rollback();
 
+  register_got_ip_callback(eth_connected_override);
+  register_down_callback(eth_disconnected_override);
+
+
   ble_init();
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_BT);
   LAN_init();
-  register_got_ip_callback(eth_connected_override);
 
   // initialize wifi
   wifi_init();
@@ -129,17 +132,22 @@ extern "C" void app_main(void)
   }
 
   // wait for provisioning to complete
-  ESP_LOGI(TAG, "Waiting for provisioning to complete...");
-  wifi_wait_connected(pdMS_TO_TICKS(60000)); // wait up to 60 seconds
+  ESP_LOGI(TAG, "Waiting for network (Wi-Fi or Ethernet)...");
+  esp_err_t net_ready = wifi_wait_connected(pdMS_TO_TICKS(60000));
 
-  // initialize sntp for time synchronization
-  init_sntp(CONFIG_RASENS_SNTP_SYNC_INTERVAL_MS); // sync interval 5 minutes
+  if (net_ready == ESP_OK)
+  {
+    ESP_LOGI(TAG, "Network ready, starting online services");
 
-  // publish current firmware version
-  updateFirmwareVersion(CONFIG_RASENS_HTTP_BACKEND_URL, cfg.access_token);
+    init_sntp(CONFIG_RASENS_SNTP_SYNC_INTERVAL_MS);
 
-  // perform ota update if available
-  perform_ota_update(CONFIG_RASENS_HTTP_BACKEND_URL, cfg.access_token);
+    updateFirmwareVersion(CONFIG_RASENS_HTTP_BACKEND_URL, cfg.access_token);
+    perform_ota_update(CONFIG_RASENS_HTTP_BACKEND_URL, cfg.access_token);
+  }
+  else
+  {
+    ESP_LOGW(TAG, "No network within timeout, continuing in offline mode");
+  }
 
   job_manager.init();
   job_manager.register_command("setTube", setTube_command);

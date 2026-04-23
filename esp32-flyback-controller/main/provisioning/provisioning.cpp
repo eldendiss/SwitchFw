@@ -93,59 +93,83 @@ static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish
 // Supervisor connect logic (single owner of Wi-Fi + MQTT)
 // =======================
 
-static bool wifi_is_connected_now(void)
+static bool net_is_connected_now(void)
 {
-    wifi_ap_record_t ap;
-    return (wifi_get_status(&ap) == ESP_OK);
+    return wifi_is_connected();   // your wifi.c now reports Wi-Fi OR Ethernet
 }
 
 static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish_status)
 {
     if (!cfg || cfg->ssid[0] == '\0') {
-        if (publish_status) status_set(DEV_ERROR, WIFI_FAILED, MQTT_DISCONNECTED, ERR_VALIDATION);
-        return false;
-    }
-
-    // Step 1: Wi-Fi
-    if (publish_status) status_set(DEV_APPLYING, WIFI_CONNECTING, MQTT_DISCONNECTED, ERR_NONE);
-
-    // Ensure clean state
-    iotIs.disconnect();
-    wifi_disconnect();
-
-    ESP_LOGI(TAG, "Connecting Wi-Fi: SSID=%s", cfg->ssid);
-    wifi_connect_async(cfg->ssid, cfg->password);
-
-    esp_err_t w = wifi_wait_connected(pdMS_TO_TICKS(WIFI_TRY_MS));
-    if (w != ESP_OK) {
-        ESP_LOGW(TAG, "Wi-Fi connect failed: %s", esp_err_to_name(w));
         if (publish_status) {
-            // classify a bit: ESP_FAIL vs TIMEOUT
-            prov_err_t e = (w == ESP_ERR_TIMEOUT) ? ERR_WIFI_TIMEOUT : ERR_WIFI_AUTH;
-            status_set(DEV_ERROR, WIFI_FAILED, MQTT_DISCONNECTED, e);
+            status_set(DEV_ERROR, WIFI_FAILED, MQTT_DISCONNECTED, ERR_VALIDATION);
         }
         return false;
     }
 
-    if (publish_status) status_set(DEV_APPLYING, WIFI_CONNECTED, MQTT_CONNECTING, ERR_NONE);
+    bool net_ok = net_is_connected_now();
 
-    // Step 2: MQTT
-    ESP_LOGI(TAG, "Connecting MQTT: %s:%u", cfg->mqtt_host, cfg->mqtt_port);
-    iotIs.connect(cfg->access_token, cfg->mqtt_host, cfg->mqtt_port);
+    // Step 1: bring up network only if neither ETH nor Wi-Fi is available
+    if (!net_ok) {
+        if (publish_status) {
+            status_set(DEV_APPLYING, WIFI_CONNECTING, MQTT_DISCONNECTED, ERR_NONE);
+        }
 
-    uint32_t t = MQTT_TRY_MS;
-    while (t > 0 && !iotIs.isConnected) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        t -= 100;
+        ESP_LOGI(TAG, "Connecting Wi-Fi: SSID=%s", cfg->ssid);
+        esp_err_t rc = wifi_connect_async(cfg->ssid, cfg->password);
+        if (rc != ESP_OK) {
+            ESP_LOGW(TAG, "wifi_connect_async failed: %s", esp_err_to_name(rc));
+            if (publish_status) {
+                status_set(DEV_ERROR, WIFI_FAILED, MQTT_DISCONNECTED, ERR_WIFI_AUTH);
+            }
+            return false;
+        }
+
+        esp_err_t w = wifi_wait_connected(pdMS_TO_TICKS(WIFI_TRY_MS));
+        if (w != ESP_OK) {
+            ESP_LOGW(TAG, "Network bring-up failed: %s", esp_err_to_name(w));
+            if (publish_status) {
+                prov_err_t e = (w == ESP_ERR_TIMEOUT) ? ERR_WIFI_TIMEOUT : ERR_WIFI_AUTH;
+                status_set(DEV_ERROR, WIFI_FAILED, MQTT_DISCONNECTED, e);
+            }
+            return false;
+        }
+
+        net_ok = true;
+    } else {
+        ESP_LOGI(TAG, "Network already available, skipping Wi-Fi connect");
     }
 
+    if (publish_status) {
+        status_set(DEV_APPLYING, WIFI_CONNECTED, MQTT_CONNECTING, ERR_NONE);
+    }
+
+    // Step 2: MQTT only if not already connected
     if (!iotIs.isConnected) {
-        ESP_LOGW(TAG, "MQTT connect failed");
-        if (publish_status) status_set(DEV_ERROR, WIFI_CONNECTED, MQTT_FAILED, ERR_MQTT_FAILED);
-        return false;
+        ESP_LOGI(TAG, "Connecting MQTT: %s:%u", cfg->mqtt_host, cfg->mqtt_port);
+        iotIs.connect(cfg->access_token, cfg->mqtt_host, cfg->mqtt_port);
+
+        uint32_t t = MQTT_TRY_MS;
+        while (t > 0 && !iotIs.isConnected) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            t -= 100;
+        }
+
+        if (!iotIs.isConnected) {
+            ESP_LOGW(TAG, "MQTT connect failed");
+            if (publish_status) {
+                status_set(DEV_ERROR, WIFI_CONNECTED, MQTT_FAILED, ERR_MQTT_FAILED);
+            }
+            return false;
+        }
+    } else {
+        ESP_LOGI(TAG, "MQTT already connected, skipping reconnect");
     }
 
-    if (publish_status) status_set(DEV_PROVISIONED, WIFI_CONNECTED, MQTT_CONNECTED, ERR_NONE);
+    if (publish_status) {
+        status_set(DEV_PROVISIONED, WIFI_CONNECTED, MQTT_CONNECTED, ERR_NONE);
+    }
+
     return true;
 }
 
@@ -190,12 +214,12 @@ static void supervisor_task(void *arg)
         cfg = s_active;
         xSemaphoreGive(s_active_lock);
 
-        bool wifi_ok = wifi_is_connected_now();
+        bool net_ok  = net_is_connected_now();
         bool mqtt_ok = iotIs.isConnected;
 
-        if (!wifi_ok || !mqtt_ok) {
+        if (!net_ok  || !mqtt_ok) {
             // publish status according to actual state before reconnect
-            if (!wifi_ok) {
+            if (!net_ok ) {
                 status_set(DEV_IDLE, WIFI_DISCONNECTED, MQTT_DISCONNECTED, ERR_NONE);
             } else {
                 status_set(DEV_IDLE, WIFI_CONNECTED, mqtt_ok ? MQTT_CONNECTED : MQTT_DISCONNECTED, ERR_NONE);
