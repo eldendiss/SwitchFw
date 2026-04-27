@@ -5,6 +5,10 @@
 #include "esp_err.h"
 #include "stdint.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct 
 {
     char ssid[32];
@@ -34,6 +38,8 @@ esp_err_t storage_save_device_config_data(device_config_data_t* data);
 esp_err_t storage_load_device_config_data(device_config_data_t* data);
 esp_err_t storage_clear_device_config_data(void);
 
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif // RS_STORAGE_H

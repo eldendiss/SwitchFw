@@ -13,6 +13,11 @@ static int s_retry_num = 0;
 static volatile bool s_wifi_connected = false;
 static volatile bool s_eth_connected = false;
 
+/* Track whether we've already registered handlers / created the netif so wifi_init is idempotent */
+static bool s_inited = false;
+static esp_event_handler_instance_t s_inst_wifi = NULL;
+static esp_event_handler_instance_t s_inst_ip   = NULL;
+
 static void set_connected_bit_if_needed(void)
 {
     if (!s_wifi_event_group)
@@ -56,8 +61,8 @@ static void event_handler(void *arg, esp_event_base_t event_base,
             {
                 xEventGroupSetBits(s_wifi_event_group, WIFI_EVT_FAIL_BIT);
             }
-            ESP_LOGW(TAG, "Wi-Fi connect failed, Ethernet state=%s",
-                     s_eth_connected ? "up" : "down");
+            ESP_LOGW(TAG, "Wi-Fi connect failed after %d retries, Ethernet state=%s",
+                     MAXIMUM_RETRY, s_eth_connected ? "up" : "down");
         }
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
@@ -73,6 +78,13 @@ static void event_handler(void *arg, esp_event_base_t event_base,
 
 esp_err_t wifi_init(void)
 {
+    if (s_inited)
+    {
+        /* Idempotent: just make sure event bits reflect current state */
+        set_connected_bit_if_needed();
+        return ESP_OK;
+    }
+
     if (!s_wifi_event_group)
     {
         s_wifi_event_group = xEventGroupCreate();
@@ -98,14 +110,11 @@ esp_err_t wifi_init(void)
         return err;
     }
 
-    esp_event_handler_instance_t instance_any_id;
-    esp_event_handler_instance_t instance_got_ip;
-
     err = esp_event_handler_instance_register(WIFI_EVENT,
                                               ESP_EVENT_ANY_ID,
                                               &event_handler,
                                               NULL,
-                                              &instance_any_id);
+                                              &s_inst_wifi);
     if (err != ESP_OK)
     {
         return err;
@@ -115,7 +124,7 @@ esp_err_t wifi_init(void)
                                               IP_EVENT_STA_GOT_IP,
                                               &event_handler,
                                               NULL,
-                                              &instance_got_ip);
+                                              &s_inst_ip);
     if (err != ESP_OK)
     {
         return err;
@@ -124,7 +133,12 @@ esp_err_t wifi_init(void)
     /* Sync event bits with any ETH state that may have happened earlier */
     set_connected_bit_if_needed();
 
-    return esp_wifi_start();
+    err = esp_wifi_start();
+    if (err == ESP_OK)
+    {
+        s_inited = true;
+    }
+    return err;
 }
 
 void eth_connected_override(void)
@@ -150,6 +164,7 @@ void wifi_reset_state(void)
         return;
     }
 
+    /* Always clear FAIL on a fresh attempt; CONNECTED bit will be re-evaluated. */
     xEventGroupClearBits(s_wifi_event_group, WIFI_EVT_FAIL_BIT);
     set_connected_bit_if_needed();
 }
@@ -166,21 +181,42 @@ bool eth_is_connected(void)
 
 esp_err_t wifi_connect_async(const char *ssid, const char *password)
 {
-    if (!ssid)
+    if (!ssid || ssid[0] == '\0')
     {
         return ESP_ERR_INVALID_ARG;
     }
 
+    /* If we're currently associated, drop it so the new config is honored cleanly.
+     * Without this, esp_wifi_set_config + esp_wifi_connect on a different SSID
+     * races with the existing association and sometimes silently keeps the old AP. */
+    wifi_ap_record_t cur = {0};
+    if (esp_wifi_sta_get_ap_info(&cur) == ESP_OK)
+    {
+        ESP_LOGI(TAG, "Disconnecting from current AP \"%s\" before switching", (const char *)cur.ssid);
+        /* Suppress retry storm during the intentional disconnect by pre-arming retry counter.
+         * We then reset it below before issuing the new connect. */
+        s_retry_num = MAXIMUM_RETRY;
+        esp_wifi_disconnect();
+        /* Give the driver a moment to process the disconnect event */
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
     wifi_config_t wifi_config = {0};
     strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
-
     if (password)
     {
         strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
     }
 
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "esp_wifi_set_config failed: %s", esp_err_to_name(err));
+        return err;
+    }
 
+    /* Reset retry counter and event bits AFTER the intentional disconnect above,
+     * so the upcoming connect attempt gets a fresh budget of MAXIMUM_RETRY tries. */
     wifi_reset_state();
 
     return esp_wifi_connect();
@@ -228,10 +264,12 @@ esp_err_t wifi_wait_connected(TickType_t ticks_to_wait)
             return ESP_OK;
         }
 
-        /* If Wi-Fi failed, keep waiting until timeout because Ethernet may still come up */
+        /* If Wi-Fi failed, keep waiting until timeout because Ethernet may still come up.
+         * Clear the FAIL bit so we actually block on the next iteration instead of spinning. */
         if (bits & WIFI_EVT_FAIL_BIT)
         {
-            ESP_LOGW(TAG, "Wi-Fi reported failure, still waiting for Ethernet or later recovery");
+            ESP_LOGW(TAG, "Wi-Fi reported failure, still waiting for Ethernet or recovery");
+            xEventGroupClearBits(s_wifi_event_group, WIFI_EVT_FAIL_BIT);
         }
     }
 }
@@ -258,26 +296,47 @@ EventGroupHandle_t wifi_get_event_group(void)
 esp_err_t wifi_disconnect(void)
 {
     s_wifi_connected = false;
-    wifi_reset_state();
-    return esp_wifi_disconnect();
+    /* Suppress auto-reconnect by exhausting retry budget for this intentional disconnect. */
+    s_retry_num = MAXIMUM_RETRY;
+    esp_err_t err = esp_wifi_disconnect();
+    /* Reset bits so a subsequent connect attempt starts clean */
+    if (s_wifi_event_group)
+    {
+        xEventGroupClearBits(s_wifi_event_group, WIFI_EVT_CONNECTED_BIT | WIFI_EVT_FAIL_BIT);
+    }
+    return err;
 }
 
 esp_err_t wifi_scan(wifi_ap_record_t *ap_info, uint16_t *ap_count)
 {
-    esp_err_t err;
+    if (!ap_info || !ap_count || *ap_count == 0)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
 
-    err = esp_wifi_scan_start(NULL, true);
+    uint16_t caller_capacity = *ap_count;
+
+    esp_err_t err = esp_wifi_scan_start(NULL, true);
     if (err != ESP_OK)
     {
         return err;
     }
 
-    err = esp_wifi_scan_get_ap_num(ap_count);
+    uint16_t found = 0;
+    err = esp_wifi_scan_get_ap_num(&found);
     if (err != ESP_OK)
     {
         return err;
     }
 
-    err = esp_wifi_scan_get_ap_records(ap_count, ap_info);
-    return err;
+    /* Cap to caller's buffer size to avoid overflow */
+    uint16_t to_copy = (found < caller_capacity) ? found : caller_capacity;
+    *ap_count = to_copy;
+
+    if (to_copy == 0)
+    {
+        return ESP_OK;
+    }
+
+    return esp_wifi_scan_get_ap_records(ap_count, ap_info);
 }
