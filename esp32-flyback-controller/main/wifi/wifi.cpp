@@ -11,6 +11,7 @@ static int s_retry_num = 0;
 
 /* Persistent link state */
 static volatile bool s_wifi_connected = false;
+static volatile bool s_wifi_connecting = false;
 static volatile bool s_eth_connected = false;
 
 static void set_connected_bit_if_needed(void)
@@ -36,26 +37,49 @@ static void event_handler(void *arg, esp_event_base_t event_base,
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
-        esp_wifi_connect();
+        if (!s_wifi_connected && !s_wifi_connecting)
+        {
+            s_wifi_connecting = true;
+            esp_err_t err = esp_wifi_connect();
+            if (err != ESP_OK)
+            {
+                s_wifi_connecting = false;
+                ESP_LOGE(TAG, "esp_wifi_connect on STA_START failed: %s", esp_err_to_name(err));
+            }
+        }
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
+        wifi_event_sta_disconnected_t *disc = (wifi_event_sta_disconnected_t *)event_data;
+
         s_wifi_connected = false;
+        s_wifi_connecting = false;
+
+        ESP_LOGW(TAG, "Wi-Fi disconnected, reason=%d", disc ? disc->reason : -1);
+
         set_connected_bit_if_needed();
 
         if (s_retry_num < MAXIMUM_RETRY)
         {
-            esp_wifi_connect();
             s_retry_num++;
+
             ESP_LOGW(TAG, "retry to connect to the AP (%d/%d)", s_retry_num, MAXIMUM_RETRY);
+
+            s_wifi_connecting = true;
+            esp_err_t err = esp_wifi_connect();
+            if (err != ESP_OK)
+            {
+                s_wifi_connecting = false;
+                ESP_LOGE(TAG, "esp_wifi_connect retry failed: %s", esp_err_to_name(err));
+            }
         }
         else
         {
-            /* Wi-Fi failed, but that must not be fatal if Ethernet is up */
             if (!s_eth_connected && s_wifi_event_group)
             {
                 xEventGroupSetBits(s_wifi_event_group, WIFI_EVT_FAIL_BIT);
             }
+
             ESP_LOGW(TAG, "Wi-Fi connect failed, Ethernet state=%s",
                      s_eth_connected ? "up" : "down");
         }
@@ -67,6 +91,8 @@ static void event_handler(void *arg, esp_event_base_t event_base,
 
         s_retry_num = 0;
         s_wifi_connected = true;
+        s_wifi_connecting = false;
+
         set_connected_bit_if_needed();
     }
 }
@@ -166,24 +192,73 @@ bool eth_is_connected(void)
 
 esp_err_t wifi_connect_async(const char *ssid, const char *password)
 {
-    if (!ssid)
+    if (!ssid || ssid[0] == '\0')
     {
         return ESP_ERR_INVALID_ARG;
     }
 
+    if (s_wifi_connected)
+    {
+        ESP_LOGI(TAG, "Wi-Fi already connected");
+        return ESP_OK;
+    }
+
+    if (s_wifi_connecting)
+    {
+        ESP_LOGW(TAG, "Wi-Fi connection already in progress");
+        return ESP_OK;
+    }
+
     wifi_config_t wifi_config = {0};
-    strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
+
+    strncpy((char *)wifi_config.sta.ssid,
+            ssid,
+            sizeof(wifi_config.sta.ssid) - 1);
 
     if (password)
     {
-        strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
+        strncpy((char *)wifi_config.sta.password,
+                password,
+                sizeof(wifi_config.sta.password) - 1);
     }
 
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    /*
+     * Use normal WPA/WPA2 compatibility.
+     * Do not require WPA3/PMF.
+     */
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA_PSK;
+    wifi_config.sta.pmf_cfg.capable = true;
+    wifi_config.sta.pmf_cfg.required = false;
+
+    esp_err_t err;
+
+    err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "esp_wifi_set_config failed: %s", esp_err_to_name(err));
+        return err;
+    }
 
     wifi_reset_state();
 
-    return esp_wifi_connect();
+    s_wifi_connecting = true;
+
+    err = esp_wifi_connect();
+    if (err != ESP_OK)
+    {
+        s_wifi_connecting = false;
+
+        if (err == ESP_ERR_WIFI_CONN)
+        {
+            ESP_LOGW(TAG, "esp_wifi_connect ignored: already connecting");
+            return ESP_OK;
+        }
+
+        ESP_LOGE(TAG, "esp_wifi_connect failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    return ESP_OK;
 }
 
 esp_err_t wifi_wait_connected(TickType_t ticks_to_wait)
@@ -232,6 +307,10 @@ esp_err_t wifi_wait_connected(TickType_t ticks_to_wait)
         if (bits & WIFI_EVT_FAIL_BIT)
         {
             ESP_LOGW(TAG, "Wi-Fi reported failure, still waiting for Ethernet or later recovery");
+
+            xEventGroupClearBits(s_wifi_event_group, WIFI_EVT_FAIL_BIT);
+
+            vTaskDelay(pdMS_TO_TICKS(250));
         }
     }
 }
@@ -258,6 +337,7 @@ EventGroupHandle_t wifi_get_event_group(void)
 esp_err_t wifi_disconnect(void)
 {
     s_wifi_connected = false;
+    s_wifi_connecting = false;
     wifi_reset_state();
     return esp_wifi_disconnect();
 }

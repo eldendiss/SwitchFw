@@ -48,6 +48,11 @@ typedef struct __attribute__((packed)) {
     uint8_t reserved[3];
 } prov_status8_t;
 
+typedef enum
+{
+    CONNECT_MAINTAIN_ACTIVE = 0,
+    CONNECT_TEST_CANDIDATE  = 1,
+} connect_mode_t;
 
 esp_err_t provisioning_manager_init(void);
 

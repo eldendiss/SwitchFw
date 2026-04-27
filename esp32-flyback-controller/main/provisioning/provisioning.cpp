@@ -97,7 +97,9 @@ typedef struct
 static QueueHandle_t s_sup_req_q;
 
 // Forward
-static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish_status);
+static bool supervisor_connect_with(const provisioning_data_t *cfg,
+                                    bool publish_status,
+                                    connect_mode_t mode);
 
 // =======================
 // Supervisor connect logic (single owner of Wi-Fi + MQTT)
@@ -108,7 +110,9 @@ static bool net_is_connected_now(void)
     return wifi_is_connected(); // your wifi.c now reports Wi-Fi OR Ethernet
 }
 
-static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish_status)
+static bool supervisor_connect_with(const provisioning_data_t *cfg,
+                                    bool publish_status,
+                                    connect_mode_t mode)
 {
     if (!cfg || cfg->ssid[0] == '\0')
     {
@@ -119,37 +123,51 @@ static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish
         return false;
     }
 
+    bool force_wifi_test = (mode == CONNECT_TEST_CANDIDATE);
     bool net_ok = net_is_connected_now();
 
-    // Step 1: bring up network only if neither ETH nor Wi-Fi is available
-    if (!net_ok)
+    /*
+     * Candidate test must actually test the candidate Wi-Fi credentials.
+     * Do not accept "already connected" as success, because that may be the old network.
+     */
+    if (force_wifi_test)
     {
         if (publish_status)
         {
             status_set(DEV_APPLYING, WIFI_CONNECTING, MQTT_DISCONNECTED, ERR_NONE);
         }
 
-        ESP_LOGI(TAG, "Connecting Wi-Fi: SSID=%s", cfg->ssid);
+        ESP_LOGI(TAG, "Testing candidate Wi-Fi: SSID=%s", cfg->ssid);
+
+        iotIs.disconnect();
+
+        wifi_disconnect();
+        vTaskDelay(pdMS_TO_TICKS(500));
+
         esp_err_t rc = wifi_connect_async(cfg->ssid, cfg->password);
         if (rc != ESP_OK)
         {
-            ESP_LOGW(TAG, "wifi_connect_async failed: %s", esp_err_to_name(rc));
+            ESP_LOGW(TAG, "candidate wifi_connect_async failed: %s", esp_err_to_name(rc));
+
             if (publish_status)
             {
                 status_set(DEV_ERROR, WIFI_FAILED, MQTT_DISCONNECTED, ERR_WIFI_AUTH);
             }
+
             return false;
         }
 
         esp_err_t w = wifi_wait_connected(pdMS_TO_TICKS(WIFI_TRY_MS));
         if (w != ESP_OK)
         {
-            ESP_LOGW(TAG, "Network bring-up failed: %s", esp_err_to_name(w));
+            ESP_LOGW(TAG, "Candidate Wi-Fi failed: %s", esp_err_to_name(w));
+
             if (publish_status)
             {
                 prov_err_t e = (w == ESP_ERR_TIMEOUT) ? ERR_WIFI_TIMEOUT : ERR_WIFI_AUTH;
                 status_set(DEV_ERROR, WIFI_FAILED, MQTT_DISCONNECTED, e);
             }
+
             return false;
         }
 
@@ -157,7 +175,52 @@ static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish
     }
     else
     {
-        ESP_LOGI(TAG, "Network already available, skipping Wi-Fi connect");
+        /*
+         * Normal supervisor maintain path.
+         * Do not flap Wi-Fi if network is already available.
+         */
+        if (!net_ok)
+        {
+            if (publish_status)
+            {
+                status_set(DEV_APPLYING, WIFI_CONNECTING, MQTT_DISCONNECTED, ERR_NONE);
+            }
+
+            ESP_LOGI(TAG, "Connecting Wi-Fi: SSID=%s", cfg->ssid);
+
+            esp_err_t rc = wifi_connect_async(cfg->ssid, cfg->password);
+            if (rc != ESP_OK)
+            {
+                ESP_LOGW(TAG, "wifi_connect_async failed: %s", esp_err_to_name(rc));
+
+                if (publish_status)
+                {
+                    status_set(DEV_ERROR, WIFI_FAILED, MQTT_DISCONNECTED, ERR_WIFI_AUTH);
+                }
+
+                return false;
+            }
+
+            esp_err_t w = wifi_wait_connected(pdMS_TO_TICKS(WIFI_TRY_MS));
+            if (w != ESP_OK)
+            {
+                ESP_LOGW(TAG, "Network bring-up failed: %s", esp_err_to_name(w));
+
+                if (publish_status)
+                {
+                    prov_err_t e = (w == ESP_ERR_TIMEOUT) ? ERR_WIFI_TIMEOUT : ERR_WIFI_AUTH;
+                    status_set(DEV_ERROR, WIFI_FAILED, MQTT_DISCONNECTED, e);
+                }
+
+                return false;
+            }
+
+            net_ok = true;
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Network already available, skipping Wi-Fi connect");
+        }
     }
 
     if (publish_status)
@@ -165,7 +228,9 @@ static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish
         status_set(DEV_APPLYING, WIFI_CONNECTED, MQTT_CONNECTING, ERR_NONE);
     }
 
-    // Step 2: MQTT only if not already connected
+    /*
+     * MQTT part stays mostly the same.
+     */
     if (!iotIs.is_connected())
     {
         if (!iotIs.is_connecting())
@@ -186,6 +251,7 @@ static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish
                 ESP_LOGW(TAG, "Network lost while waiting for MQTT");
                 break;
             }
+
             vTaskDelay(pdMS_TO_TICKS(100));
             t -= 100;
         }
@@ -193,10 +259,12 @@ static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish
         if (!iotIs.is_connected())
         {
             ESP_LOGW(TAG, "MQTT connect failed");
+
             if (publish_status)
             {
                 status_set(DEV_ERROR, WIFI_CONNECTED, MQTT_FAILED, ERR_MQTT_FAILED);
             }
+
             return false;
         }
     }
@@ -235,7 +303,7 @@ static void supervisor_task(void *arg)
                 bool old_is_prov;
                 connection_supervisor_get_active(&old, &old_is_prov);
 
-                bool ok = supervisor_connect_with(&req.candidate, true);
+                bool ok = supervisor_connect_with(&req.candidate, true, CONNECT_TEST_CANDIDATE);
 
                 // Revert runtime to old active if test failed OR even if ok (policy choice):
                 // For your requirements, if ok we'll keep it connected (nice UX), and apply_task will set active+save.
@@ -243,7 +311,7 @@ static void supervisor_task(void *arg)
                 if (!ok)
                 {
                     ESP_LOGI(TAG, "Candidate failed, reverting to previous active config");
-                    supervisor_connect_with(&old, true);
+                    supervisor_connect_with(&old, true, CONNECT_MAINTAIN_ACTIVE);
                 }
 
                 if (req.requester)
@@ -267,12 +335,12 @@ static void supervisor_task(void *arg)
         if (!net_ok)
         {
             status_set(DEV_IDLE, WIFI_DISCONNECTED, MQTT_DISCONNECTED, ERR_NONE);
-            supervisor_connect_with(&cfg, true);
+            supervisor_connect_with(&cfg, true, CONNECT_MAINTAIN_ACTIVE);
         }
         else if (!mqtt_ok && !mqtt_busy)
         {
             status_set(DEV_IDLE, WIFI_CONNECTED, MQTT_DISCONNECTED, ERR_NONE);
-            supervisor_connect_with(&cfg, true);
+            supervisor_connect_with(&cfg, true, CONNECT_MAINTAIN_ACTIVE);
         }
 
         vTaskDelay(pdMS_TO_TICKS(SUPERVISOR_LOOP_MS));
