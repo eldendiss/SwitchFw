@@ -135,7 +135,7 @@ esp_err_t LAN_init(){
     phy_spi = esp_eth_phy_new_w5500(&phy_config_spi);
 
     esp_eth_config_t eth_config_spi = ETH_DEFAULT_CONFIG(mac_spi, phy_spi);
-    ESP_ERROR_CHECK(esp_eth_driver_install(&eth_config_spi, &eth_handle_spi));
+    ESP_RETURN_ON_FALSE(esp_eth_driver_install(&eth_config_spi, &eth_handle_spi),ESP_ERR_INVALID_STATE,TAG, "esp driver install failed");
 
     /* The SPI Ethernet module might not have a burned factory MAC address, we cat to set it manually.
     02:00:00 is a Locally Administered OUI range so should not be used except when testing on a LAN under your control.
@@ -147,14 +147,14 @@ esp_err_t LAN_init(){
     } else {
         mac[5] += 1;
     }
-    ESP_ERROR_CHECK(esp_eth_ioctl(eth_handle_spi, ETH_CMD_S_MAC_ADDR, mac));
+    ESP_RETURN_ON_FALSE(esp_eth_ioctl(eth_handle_spi, ETH_CMD_S_MAC_ADDR, mac),ESP_ERR_INVALID_STATE,TAG, "esp driver install failed");
 
     // attach Ethernet driver to TCP/IP stack
-    ESP_ERROR_CHECK(esp_netif_attach(eth_netif_spi, esp_eth_new_netif_glue(eth_handle_spi)));
+    ESP_RETURN_ON_FALSE(esp_netif_attach(eth_netif_spi, esp_eth_new_netif_glue(eth_handle_spi)),ESP_ERR_INVALID_STATE,TAG, "esp driver install failed");
 
     // Register user defined event handers
-    ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &got_ip_event_handler, NULL));
+    ESP_RETURN_ON_FALSE(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL),ESP_ERR_INVALID_STATE,TAG, "esp driver install failed");
+    ESP_RETURN_ON_FALSE(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &got_ip_event_handler, NULL),ESP_ERR_INVALID_STATE,TAG, "esp driver install failed");
 
 
     return esp_eth_start(eth_handle_spi);
