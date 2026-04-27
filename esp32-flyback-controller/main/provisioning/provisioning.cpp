@@ -168,11 +168,18 @@ static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish
         if (publish_status)
             status_set(DEV_APPLYING, WIFI_CONNECTING, MQTT_DISCONNECTED, ERR_NONE);
 
-        ESP_LOGI(TAG, "Connecting Wi-Fi: SSID=%s", cfg->ssid);
+        ESP_LOGI(TAG, "Testing candidate Wi-Fi: SSID=%s", cfg->ssid);
+
+        iotIs.disconnect();
+
+        wifi_disconnect();
+        vTaskDelay(pdMS_TO_TICKS(500));
+
         esp_err_t rc = wifi_connect_async(cfg->ssid, cfg->password);
         if (rc != ESP_OK)
         {
-            ESP_LOGW(TAG, "wifi_connect_async failed: %s", esp_err_to_name(rc));
+            ESP_LOGW(TAG, "candidate wifi_connect_async failed: %s", esp_err_to_name(rc));
+
             if (publish_status)
                 status_set(DEV_ERROR, WIFI_FAILED, MQTT_DISCONNECTED, ERR_WIFI_AUTH);
             if (out_err) *out_err = ERR_WIFI_AUTH;
@@ -225,6 +232,7 @@ static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish
                 ESP_LOGW(TAG, "Network lost while waiting for MQTT");
                 break;
             }
+
             vTaskDelay(pdMS_TO_TICKS(100));
             t -= 100;
         }
@@ -232,6 +240,7 @@ static bool supervisor_connect_with(const provisioning_data_t *cfg, bool publish
         if (!iotIs.is_connected())
         {
             ESP_LOGW(TAG, "MQTT connect failed");
+
             if (publish_status)
                 status_set(DEV_ERROR, WIFI_CONNECTED, MQTT_FAILED, ERR_MQTT_FAILED);
             if (out_err) *out_err = ERR_MQTT_FAILED;
