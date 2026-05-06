@@ -246,17 +246,9 @@ bool factoryResetCommand(const std::vector<double> &params)
 {
     (void)params;
 
-    provisioning_data_t cfg = {0};
-    if (storage_load_provisioning_data(&cfg) != ESP_OK) {
-        return false;
-    }
-
-    memset(cfg.ssid, 0, sizeof(cfg.ssid));
-    memset(cfg.password, 0, sizeof(cfg.password));
-
-    if (storage_save_provisioning_data(&cfg) != ESP_OK) {
-        return false;
-    }
+    // Clear both NVS namespaces so the device boots with menuconfig defaults.
+    storage_clear_provisioning_data();
+    storage_clear_device_config_data();
 
     xTaskCreate(restartTask, "restart", 4096, NULL, 6, NULL);
     return true;

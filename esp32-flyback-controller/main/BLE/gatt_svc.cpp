@@ -558,8 +558,8 @@ int gatt_svc_init(void)
     ESP_LOGI(TAG, "SSID: %s", ssid_chr_val);
     ESP_LOGI(TAG, "Password: %s", password_chr_val);
     ESP_LOGI(TAG, "MQTT server: %s", mqtt_server_chr_val);
-    uint16_t mqtt_port = (mqtt_port_chr_val[0] << 8)
-                            | mqtt_port_chr_val[1];
+    uint16_t mqtt_port = ((uint16_t)mqtt_port_chr_val[1] << 8)
+                            | mqtt_port_chr_val[0];
     ESP_LOGI(TAG, "MQTT port: %d", mqtt_port);
     ESP_LOGI(TAG, "Access token: %s", access_token_chr_val);
 

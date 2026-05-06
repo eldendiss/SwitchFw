@@ -46,12 +46,16 @@ typedef enum {
     ERR_STORAGE      = 5,
 } prov_err_t;
 
+typedef enum {
+    ETH_DISCONNECTED = 0,
+    ETH_CONNECTED    = 1,
+} eth_status_t;
+
 /* ------------------------------------------------------------------------- */
 /* BLE status payload                                                        */
 /*                                                                           */
 /* Packed 8-byte status block published over the BLE GATT status             */
 /* characteristic. Layout matches the wire format expected by the app.       */
-/* The trailing reserved bytes pad to 8 and are available for future use.    */
 /* ------------------------------------------------------------------------- */
 
 typedef struct __attribute__((packed)) {
@@ -60,7 +64,8 @@ typedef struct __attribute__((packed)) {
     uint8_t mqtt_status;     /* mqtt_status_t   */
     uint8_t err_code;        /* prov_err_t      */
     int8_t  wifi_rssi;       /* dBm, 0 if unknown */
-    uint8_t reserved[3];
+    uint8_t eth_status;      /* eth_status_t    */
+    uint8_t reserved[2];
 } prov_status8_t;
 
 /* ------------------------------------------------------------------------- */

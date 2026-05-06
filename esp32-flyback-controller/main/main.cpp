@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "flyback_psu.h"
 #include "esp_timer.h"
 #include "geiger_counter.h"
@@ -21,6 +22,10 @@
 #include "esp_mac.h"
 
 static const char *TAG = "main";
+
+// Persists across soft resets; cleared on power cycle.
+// Used to detect crash loops and break rollback purgatory.
+static RTC_DATA_ATTR uint32_t s_consecutive_crashes = 0;
 
 geiger_counter_pcnt4_t gc;
 device_config_data_t devCfg;
@@ -71,8 +76,33 @@ extern "C" void app_main(void)
   // initialize storage
   storage_init();
 
-  // mark app as valid to avoid rollback
-  mark_app_valid_cancel_rollback();
+  // Crash-loop detection: count consecutive panics/WDT resets via RTC memory.
+  // RTC memory survives software resets but clears on power loss.
+  esp_reset_reason_t reset_reason = esp_reset_reason();
+  if (reset_reason == ESP_RST_PANIC  || reset_reason == ESP_RST_INT_WDT ||
+      reset_reason == ESP_RST_TASK_WDT || reset_reason == ESP_RST_WDT)
+  {
+    s_consecutive_crashes++;
+    ESP_LOGE(TAG, "Recovered from crash (reason=%d). Consecutive crashes: %lu",
+             (int)reset_reason, (unsigned long)s_consecutive_crashes);
+  }
+  else
+  {
+    s_consecutive_crashes = 0;
+  }
+
+  // Escape hatch: after 5 consecutive crashes mark firmware valid regardless
+  // of what fails below. This prevents rollback purgatory if both firmware
+  // images have the same hardware issue.
+  if (s_consecutive_crashes >= 5)
+  {
+    ESP_LOGW(TAG, "Crash loop detected (%lu), marking firmware valid early",
+             (unsigned long)s_consecutive_crashes);
+    mark_app_valid_cancel_rollback();
+  }
+
+  // NOTE: mark_app_valid_cancel_rollback() is called again after all hardware
+  // init succeeds. That is the normal path. The call above is only the escape hatch.
 
   register_got_ip_callback(eth_connected_override);
   register_down_callback(eth_disconnected_override);
@@ -130,6 +160,19 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "Loaded device configuration data: interval=%u s, active_range = %u", devCfg.interval, devCfg.active_range);
   }
 
+  // Sanitize loaded config — corrupt/zero values can cause infinite tight loops
+  // or invalid hardware state in the field.
+  if (devCfg.interval == 0 || devCfg.interval > 3600)
+  {
+    ESP_LOGW(TAG, "Interval %u out of range, clamping to 60s", devCfg.interval);
+    devCfg.interval = 60;
+  }
+  if (devCfg.active_range > 3)
+  {
+    ESP_LOGW(TAG, "Invalid active_range %u, resetting to 0", devCfg.active_range);
+    devCfg.active_range = 0;
+  }
+
   // wait for provisioning to complete
   ESP_LOGI(TAG, "Waiting for network (Wi-Fi or Ethernet)...");
   esp_err_t net_ready = wifi_wait_connected(pdMS_TO_TICKS(60000));
@@ -177,68 +220,101 @@ extern "C" void app_main(void)
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
 
-  if (ret != ESP_OK)
+  // On PSU failure: do NOT abort(). That causes a bootloop in field-deployed devices.
+  // Continue without HV — WiFi/MQTT/OTA/BLE remain operational so recovery is possible.
+  bool psu_ok = (ret == ESP_OK);
+  if (!psu_ok)
   {
-    ESP_LOGE(TAG, "Flyback init failed permanently, restarting");
-    abort();
+    ESP_LOGE(TAG, "Flyback PSU init failed permanently — running without HV. Network remains active.");
+  }
+  else
+  {
+    flyback_set_voltage(0, static_cast<float>(devCfg.set_voltage[0]));
+    flyback_set_voltage(1, static_cast<float>(devCfg.set_voltage[1]));
+    flyback_set_voltage(2, static_cast<float>(devCfg.set_voltage[2]));
+    flyback_set_voltage(3, static_cast<float>(devCfg.set_voltage[3]));
   }
 
-  flyback_set_voltage(0, static_cast<float>(devCfg.set_voltage[0]));
-  flyback_set_voltage(1, static_cast<float>(devCfg.set_voltage[1]));
-  flyback_set_voltage(2, static_cast<float>(devCfg.set_voltage[2]));
-  flyback_set_voltage(3, static_cast<float>(devCfg.set_voltage[3]));
-
-  // Optionally persist configuration to EEPROM (uncomment if desired)
-  // ESP_ERROR_CHECK(flyback_psu_send_command(&psu, FLYBACK_CMD_SAVE_CONFIG));
-
-  // accept pulses >= 1000 ns (1 µs),
+  // Geiger counter PCNT is independent of the PSU — start it regardless
   esp_err_t err = geiger_counter_pcnt_start(&gc, (gpio_num_t)CONFIG_RASENS_INTERRUPT_PIN, CONFIG_RASENS_INTERRUPT_PIN_ACTIVE_HIGH, 500);
   if (err != ESP_OK)
   {
     ESP_LOGE(TAG, "Failed to start counter: %s", esp_err_to_name(err));
   }
 
-  geiger_counter_set_conversion_factor(&gc, 0, static_cast<float>(devCfg.coeff[0]) / 10000.0f); // R1
-  geiger_counter_set_conversion_factor(&gc, 1, static_cast<float>(devCfg.coeff[1]) / 10000.0f); // R2
-  geiger_counter_set_conversion_factor(&gc, 2, static_cast<float>(devCfg.coeff[2]) / 10000.0f); // R3
-  geiger_counter_set_conversion_factor(&gc, 3, static_cast<float>(devCfg.coeff[3]) / 10000.0f); // R4
+  geiger_counter_set_conversion_factor(&gc, 0, static_cast<float>(devCfg.coeff[0]) / 10000.0f);
+  geiger_counter_set_conversion_factor(&gc, 1, static_cast<float>(devCfg.coeff[1]) / 10000.0f);
+  geiger_counter_set_conversion_factor(&gc, 2, static_cast<float>(devCfg.coeff[2]) / 10000.0f);
+  geiger_counter_set_conversion_factor(&gc, 3, static_cast<float>(devCfg.coeff[3]) / 10000.0f);
 
-  // link Geiger counter device to flyback controller for range sync
-  flyback_set_geiger_counter_device(&gc);
-
-  // Enable flyback PSU output
-  flyback_enable();
-
-  // Wait for relay switching to complete (timeout 3 seconds)
-  esp_err_t idle = flyback_wait_for_idle(3000, 10);
-  if (idle != ESP_OK)
+  if (psu_ok)
   {
-    ESP_LOGW(TAG, "Timeout waiting for range switch to complete");
+    flyback_set_geiger_counter_device(&gc);
+
+    flyback_enable();
+
+    esp_err_t idle = flyback_wait_for_idle(3000, 10);
+    if (idle != ESP_OK)
+    {
+      ESP_LOGW(TAG, "Timeout waiting for range switch to complete");
+    }
+
+    flyback_set_channel(devCfg.active_range);
+    geiger_counter_set_active_range(&gc, devCfg.active_range);
+
+    idle = flyback_wait_for_idle(3000, 10);
+    if (idle != ESP_OK)
+    {
+      ESP_LOGW(TAG, "Timeout waiting for range switch to complete");
+    }
   }
 
-  flyback_set_channel(devCfg.active_range);
-  geiger_counter_set_active_range(&gc, devCfg.active_range);
-
-  // Wait for relay switching to complete (timeout 3 seconds)
-  idle = flyback_wait_for_idle(3000, 10);
-  if (idle != ESP_OK)
-  {
-    ESP_LOGW(TAG, "Timeout waiting for range switch to complete");
-  }
+  // All hardware init done — safe to mark firmware valid and clear crash counter.
+  // This is the normal (non-escape-hatch) call. OTA rollback will not occur from here.
+  s_consecutive_crashes = 0;
+  mark_app_valid_cancel_rollback();
 
   hv_avg_init();
-  xTaskCreate(avg_u, "average U", 4096, NULL, 6, NULL);
+  if (psu_ok)
+  {
+    xTaskCreate(avg_u, "average U", 4096, NULL, 6, NULL);
+  }
 
   while (true)
   {
-    // wait 1 minute before next measurement
+    // wait before next measurement
     vTaskDelay(pdMS_TO_TICKS((uint32_t)devCfg.interval * 1000UL));
-    /*flyback_wake();
-    flyback_enable();
-    geiger_counter_pcnt_resume(&gc);*/
 
-    // Measure for 1 minute */
-    // vTaskDelay(pdMS_TO_TICKS(60000));
+    // If the PSU wasn't available at boot (or was lost), try to bring it up.
+    // i2c_driver_delete() is required between attempts because flyback_psu_init()
+    // installs the driver and leaves it installed even on partial failures.
+    if (!psu_ok)
+    {
+      ESP_LOGI(TAG, "Attempting PSU recovery...");
+      if (flyback_init() == ESP_OK)
+      {
+        ESP_LOGI(TAG, "Flyback PSU recovered — applying config and enabling output");
+        psu_ok = true;
+        flyback_set_voltage(0, static_cast<float>(devCfg.set_voltage[0]));
+        flyback_set_voltage(1, static_cast<float>(devCfg.set_voltage[1]));
+        flyback_set_voltage(2, static_cast<float>(devCfg.set_voltage[2]));
+        flyback_set_voltage(3, static_cast<float>(devCfg.set_voltage[3]));
+        flyback_set_geiger_counter_device(&gc);
+        flyback_enable();
+        flyback_wait_for_idle(3000, 10);
+        flyback_set_channel(devCfg.active_range);
+        geiger_counter_set_active_range(&gc, devCfg.active_range);
+        flyback_wait_for_idle(3000, 10);
+        hv_avg_reset();
+        xTaskCreate(avg_u, "average U", 4096, NULL, 6, NULL);
+      }
+      else
+      {
+        ESP_LOGW(TAG, "PSU recovery failed, will retry next interval");
+        i2c_driver_delete(I2C_NUM_0);
+      }
+    }
+
     // Read Geiger counter statistics
     float cpm = geiger_counter_pcnt_get_cpm(&gc, devCfg.active_range);
     float usvh = geiger_counter_pcnt_get_sieverts_per_hour(&gc, devCfg.active_range);
@@ -253,8 +329,11 @@ extern "C" void app_main(void)
     time(&now);
     // iotIs.send_data("cps", cps, now);
     
-    uint8_t curCh = 0;
-    flyback_get_channel(&curCh);
+    uint8_t curCh = devCfg.active_range;
+    if (psu_ok)
+    {
+      flyback_get_channel(&curCh);
+    }
     int iface = 0;
     if (eth_is_connected()) {
         iface = 2;
@@ -272,8 +351,11 @@ extern "C" void app_main(void)
         goto mqtt_publish_fail;
       if (!iotIs.send_data("dr", dr, now))
         goto mqtt_publish_fail;
-      if (!iotIs.send_data("voltage", hv_avg_get(), now))
-        goto mqtt_publish_fail;
+      if (psu_ok)
+      {
+        if (!iotIs.send_data("voltage", hv_avg_get(), now))
+          goto mqtt_publish_fail;
+      }
       if (!iotIs.send_data("samplerate", devCfg.interval, now))
         goto mqtt_publish_fail;
       if (!iotIs.send_data("range", curCh + 1, now))

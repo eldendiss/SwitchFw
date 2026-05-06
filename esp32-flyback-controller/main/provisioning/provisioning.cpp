@@ -51,6 +51,7 @@ static void status_set(device_status_t dev, wifi_status_t wifi, mqtt_status_t mq
     s_status.mqtt_status   = (uint8_t)mqtt;
     s_status.err_code      = (uint8_t)err;
     s_status.wifi_rssi     = rssi;
+    s_status.eth_status    = eth_is_connected() ? (uint8_t)ETH_CONNECTED : (uint8_t)ETH_DISCONNECTED;
     status_publish_locked();
     xSemaphoreGive(s_status_lock);
 }
@@ -378,7 +379,7 @@ esp_err_t connection_supervisor_init(void)
 {
     if (!s_sup_req_q)
         return ESP_ERR_INVALID_STATE;
-    BaseType_t ok = xTaskCreate(supervisor_task, "conn_sup", 4096, NULL, 6, NULL);
+    BaseType_t ok = xTaskCreate(supervisor_task, "conn_sup", 6144, NULL, 6, NULL);
     return ok == pdPASS ? ESP_OK : ESP_FAIL;
 }
 
@@ -555,13 +556,13 @@ void provisioning_manager_on_command(uint8_t cmd)
 
     if (cmd == 0x01 || cmd == 0x03)
     {
-        xTaskCreate(apply_task, "prov_apply", 4096, (void *)(uintptr_t)cmd, 5, NULL);
+        xTaskCreate(apply_task, "prov_apply", 6144, (void *)(uintptr_t)cmd, 5, NULL);
         return;
     }
 
     if (cmd == 0x02)
     {
-        xTaskCreate(clear_task, "prov_clear", 3072, NULL, 5, NULL);
+        xTaskCreate(clear_task, "prov_clear", 4096, NULL, 5, NULL);
         return;
     }
 
