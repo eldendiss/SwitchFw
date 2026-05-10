@@ -21,6 +21,9 @@
 #include "hv_mon.h"
 #include "LAN.h"
 #include "esp_mac.h"
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
 
 static const char *TAG = "main";
 
@@ -30,6 +33,56 @@ static RTC_DATA_ATTR uint32_t s_consecutive_crashes = 0;
 
 geiger_counter_pcnt4_t gc;
 device_config_data_t devCfg;
+
+// GPIO33 = ADC1_CH5 on original ESP32
+#define BAT_ADC_CHANNEL   ADC_CHANNEL_5
+#define BAT_ADC_ATTEN     ADC_ATTEN_DB_12   // 0–3.1 V input range
+// R1=100k, R2=22k divider: V_bat = V_adc * (100+22)/22
+#define BAT_DIVIDER       (122.0f / 22.0f)
+
+static adc_oneshot_unit_handle_t s_adc1     = NULL;
+static adc_cali_handle_t         s_bat_cali = NULL;
+static volatile float            s_bat_v    = 0.0f;
+
+static void bat_adc_init(void)
+{
+    adc_oneshot_unit_init_cfg_t unit_cfg = { .unit_id = ADC_UNIT_1 };
+    if (adc_oneshot_new_unit(&unit_cfg, &s_adc1) != ESP_OK) {
+        ESP_LOGE(TAG, "ADC1 init failed");
+        return;
+    }
+    adc_oneshot_chan_cfg_t chan_cfg = {
+        .atten    = BAT_ADC_ATTEN,
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+    };
+    if (adc_oneshot_config_channel(s_adc1, BAT_ADC_CHANNEL, &chan_cfg) != ESP_OK) {
+        ESP_LOGE(TAG, "ADC channel config failed");
+        return;
+    }
+    adc_cali_line_fitting_config_t cali_cfg = {
+        .unit_id      = ADC_UNIT_1,
+        .atten        = BAT_ADC_ATTEN,
+        .bitwidth     = ADC_BITWIDTH_DEFAULT,
+        .default_vref = 1100,
+    };
+    if (adc_cali_create_scheme_line_fitting(&cali_cfg, &s_bat_cali) != ESP_OK) {
+        ESP_LOGW(TAG, "ADC calibration unavailable, using raw estimate");
+    }
+}
+
+static void bat_sample(void)
+{
+    if (!s_adc1) return;
+    int raw = 0;
+    if (adc_oneshot_read(s_adc1, BAT_ADC_CHANNEL, &raw) != ESP_OK) return;
+    int mv = 0;
+    if (s_bat_cali) {
+        adc_cali_raw_to_voltage(s_bat_cali, raw, &mv);
+    } else {
+        mv = (raw * 3100) / 4095;
+    }
+    s_bat_v = (mv / 1000.0f) * BAT_DIVIDER;
+}
 
 static void avg_u(void *p)
 {
@@ -57,6 +110,8 @@ static void avg_u(void *p)
     {
       ESP_LOGW(TAG, "Failed to read PSU status");
     }
+
+    bat_sample();
   }
 }
 
@@ -76,6 +131,7 @@ extern "C" void app_main(void)
   ESP_LOGI(TAG, "Boot...");
   // initialize storage
   storage_init();
+  bat_adc_init();
 
   // Enable automatic light sleep. The PM framework sleeps the CPU whenever
   // all tasks are blocked, waking on any interrupt (WiFi RX, timers, GPIO).
@@ -271,7 +327,17 @@ extern "C" void app_main(void)
     esp_err_t idle = flyback_wait_for_idle(3000, 10);
     if (idle != ESP_OK)
     {
-      ESP_LOGW(TAG, "Timeout waiting for range switch to complete");
+      ESP_LOGW(TAG, "Timeout waiting for PSU to become idle");
+    }
+
+    // PSU powers on with its own default voltage. Force a range switch so it
+    // picks up the voltage table entries we wrote above via flyback_set_voltage().
+    uint8_t tmp_range = (devCfg.active_range == 0) ? 1 : 0;
+    flyback_set_channel(tmp_range);
+    idle = flyback_wait_for_idle(2000, 10);
+    if (idle != ESP_OK)
+    {
+      ESP_LOGW(TAG, "Timeout waiting for temp range switch");
     }
 
     flyback_set_channel(devCfg.active_range);
@@ -356,6 +422,9 @@ extern "C" void app_main(void)
         iface = 1;
     }
 
+    // avg_u task only runs when psu_ok; sample battery here as fallback
+    if (!psu_ok) bat_sample();
+
     if (iotIs.can_publish())
     {
       if (!iotIs.send_data("cr60", cpm, now))
@@ -376,6 +445,8 @@ extern "C" void app_main(void)
       if (!iotIs.send_data("range", curCh + 1, now))
         goto mqtt_publish_fail;
       if (!iotIs.send_data("iface", iface, now))
+        goto mqtt_publish_fail;
+      if (!iotIs.send_data("battery", s_bat_v, now))
         goto mqtt_publish_fail;
     }
     else
