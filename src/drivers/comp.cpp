@@ -104,6 +104,20 @@ uint8_t comp_oc_pulse_sticky()
 // ISRs
 // ----------------------------------------------------------------------------
 
+void comp_suspend()
+{
+  TIMSK1 &= ~(_BV(TOIE1) | _BV(OCIE1B));
+  ACSR   &= ~_BV(ACIE);
+  ac_armed = 0;
+}
+
+void comp_resume(uint32_t now_us)
+{
+  TIMSK1 |= _BV(TOIE1) | _BV(OCIE1B);
+  if (!ac_armed)
+    comp_arm_after_us(0, now_us);
+}
+
 /**
  * \internal
  * \brief Analog Comparator ISR — immediate hard gate kill and latch OC.

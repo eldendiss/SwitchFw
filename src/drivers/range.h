@@ -13,15 +13,9 @@
 
 /**
  * \brief Initialize range I/O and apply current range.
- * \details Configures RANGE0/1 inputs (with pull-ups) and R_SW outputs.
+ * \details Configures R_SW outputs. Range is controlled exclusively via I²C.
  */
 void range_init();
-
-/**
- * \brief Read current external range-select inputs (active-low).
- * \return Code 0..3 derived from RANGE1:RANGE0.
- */
-uint8_t range_get_input_code();
 
 /**
  * @brief report current made range (0..3)

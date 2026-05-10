@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <avr/sleep.h>
 #include "pins.h"
 #include "config_clock.h"
 
@@ -26,6 +27,12 @@
  * - Bind and start the I²C slave (addr 0x2A) for config/status access.
  * - Run the 1 kHz control loop, range switching state machine, and LEDs.
  *
+ * Range select is I²C-only (register 0x20). PD4/PD5 are free for other use.
+ *
+ * Power policy when EN is deasserted:
+ * - ADC and Timer1 ISRs (OVF/COMPB) are stopped — not needed with gate off.
+ * - CPU enters IDLE sleep; Timer2 OVF (every 256 µs) and I²C events wake it.
+ *
  * LED policy (see \c drivers/status_led.*):
  * - Fault LED encodes fault codes (OC/OV, etc.).
  * - OK LED indicates run state (boot, wait EN, precharge, ramp, PFM hold, etc.).
@@ -39,22 +46,8 @@ static AppConfig g_cfg;
 /** \brief Runtime controller state (integrators, latches, EMA, etc.). */
 static ControlState g_state;
 
-extern uint8_t i2c_get_range_src();
-extern void i2c_set_range_src(uint8_t src);
-
-static uint32_t last_i2c_select_us = 0;
-static const uint32_t I2C_HOLD_US = 0; // set to e.g. 30*1000000 for AUTO fallback after 30 s
-
 /**
  * \brief Arduino setup: put hardware in a safe state and initialize all subsystems.
- * \details
- * Steps:
- * 1) Force gate LOW and detach OC1A.
- * 2) Apply CPU prescaler (\c CPU_DIV_LOG2 → \c F_CPU_CFG).
- * 3) Configure LEDs, EN input, range IO, and a board strap.
- * 4) Initialize PWM/ADC/comparator/timebase (interrupt-safe).
- * 5) Load configuration; reset controller timebase/phase.
- * 6) Arm comparator after delay (AREF settle), then start I²C at 0x2A.
  */
 void setup()
 {
@@ -71,7 +64,7 @@ void setup()
   DDRC |= _BV(LED_OK) | _BV(LED_FAULT);
   led_init();
 
-  // EN + ranges
+  // EN + range switches (no HW range inputs — I2C only)
   EN_init_input();
   range_init();
 
@@ -105,94 +98,68 @@ void setup()
 /**
  * \brief Main loop: gating, range handling, control step, and LED/UI updates.
  * \details
- * - EN gating: controller runs only if EN is active and range sequencer is idle.
- * - External range inputs trigger a safe break→wait-stable→make sequence.
- * - Controller executes 1 kHz steps with OV/OC handling and optional PFM hold.
- * - OC sticky pulses extend the OC indicator for UI visibility.
- * - LEDs reflect current run/fault states.
+ * When EN is deasserted the CPU enters IDLE sleep after handling housekeeping.
+ * Timer2 OVF (256 µs) and I²C events provide wake-up; Timer1 ISRs and ADC are
+ * silenced in this state so they do not prevent the CPU from sleeping.
  */
 void loop()
 {
   uint32_t now = us_now32();
 
-  // --- arbitration state (persist across calls) ---
-  static uint32_t last_i2c_select_us = 0;
-  static uint8_t last_hw_code = 0xFF;
   static uint8_t last_made = 0xFF;
-  const uint32_t I2C_HOLD_US = 0; // >0 to AUTO-fallback to HW after idle; 0 = disabled
 
-  // ---- source selection: HW vs I2C (0x21) ----
-  uint8_t src = i2c_get_range_src();
-
-  // I2C range requests (only if not forced-HW)
+  // ---- I2C range requests (only source — HW pins repurposed) ----
   uint8_t req;
-  if ((src != RANGE_SRC_HW) && i2c_take_range_request(&req))
+  if (i2c_take_range_request(&req))
   {
-    last_i2c_select_us = now;
     if (!range_is_busy())
       range_request((uint8_t)(req & 0x03));
-    if (src == RANGE_SRC_AUTO)
-      i2c_set_range_src(RANGE_SRC_I2C); // I²C takes over
   }
 
-  // Optional AUTO fallback to HW after inactivity
-  if (src == RANGE_SRC_AUTO && I2C_HOLD_US > 0)
-  {
-    if ((int32_t)(now - last_i2c_select_us) >= (int32_t)I2C_HOLD_US)
-    {
-      i2c_set_range_src(RANGE_SRC_HW);
-      src = RANGE_SRC_HW;
-    }
-  }
-
-  // HW pins drive range only in HW mode
-  if (src == RANGE_SRC_HW)
-  {
-    uint8_t hw = range_get_input_code();
-    if (hw != last_hw_code && !range_is_busy())
-    {
-      range_request((uint8_t)(hw & 0x03));
-      last_hw_code = hw;
-    }
-  }
-
-  // ---- EN gating computed AFTER arbitration ----
+  // ---- EN gating ----
   bool allow = EN_is_active() && !range_is_busy();
   g_allow_switch = allow;
-  comp_service(now);
-
-  // Controller inputs
-  uint16_t fb_raw = adc_fb_decim();
 
   if (!allow)
   {
-    // Keep gate off but continue the range FSM
+    // Stop peripherals that are only needed while switching
+    adc_stop();
+    comp_suspend(); // disarms comparator + silences Timer1 OVF/COMPB ISRs
+
     pwm_disable();
     pwm_set_duty(0.0f);
-    range_service(now, fb_raw, 0);
+    range_service(now, 0, 0);
 
-    // Apply per-range ACTIVE profile when relay makes
+    // Apply per-range profile when relay makes during disabled state
     uint8_t made = range_get_current_code();
     if (made != last_made && made < 4)
     {
       last_made = made;
-      g_cfg.ctrl.fb_set_cnt = g_cfg.ctrl.fb_set_cnt_tab[made];
-      g_cfg.ctrl.fb_ov_trip_cnt = g_cfg.ctrl.fb_ov_trip_cnt_tab[made];
+      g_cfg.ctrl.fb_set_cnt      = g_cfg.ctrl.fb_set_cnt_tab[made];
+      g_cfg.ctrl.fb_ov_trip_cnt  = g_cfg.ctrl.fb_ov_trip_cnt_tab[made];
       g_cfg.ctrl.fb_ov_clear_cnt = g_cfg.ctrl.fb_ov_clear_cnt_tab[made];
       g_state.active_range = made;
-
-      // gentle re-entry
       g_state.ramp_ms = 0;
-      g_state.pre_ms = 0;
-      g_state.phase = PH_PRECHARGE;
+      g_state.pre_ms  = 0;
+      g_state.phase   = PH_PRECHARGE;
     }
 
     led_status_run(now, range_is_busy() ? S_RANGE_SWITCH : S_WAIT_EN);
     led_fault_run(now, F_NONE);
+
+    // Sleep until Timer2 OVF (256 µs) or I²C interrupt
+    set_sleep_mode(SLEEP_MODE_IDLE);
+    sleep_mode();
     return;
   }
 
+  // ---- Active path: restart peripherals silenced during disabled state ----
+  adc_start();
+  comp_resume(now); // re-enables Timer1 ISRs, schedules comparator re-arm
+  comp_service(now);
+
   // ---- Normal control path ----
+  uint16_t fb_raw = adc_fb_decim();
   uint16_t fb;
   int16_t dcounts;
   uint8_t oc_now = comp_oc_fault();
@@ -210,15 +177,13 @@ void loop()
   if (made != last_made && made < 4)
   {
     last_made = made;
-    g_cfg.ctrl.fb_set_cnt = g_cfg.ctrl.fb_set_cnt_tab[made];
-    g_cfg.ctrl.fb_ov_trip_cnt = g_cfg.ctrl.fb_ov_trip_cnt_tab[made];
+    g_cfg.ctrl.fb_set_cnt      = g_cfg.ctrl.fb_set_cnt_tab[made];
+    g_cfg.ctrl.fb_ov_trip_cnt  = g_cfg.ctrl.fb_ov_trip_cnt_tab[made];
     g_cfg.ctrl.fb_ov_clear_cnt = g_cfg.ctrl.fb_ov_clear_cnt_tab[made];
     g_state.active_range = made;
-
-    // restart gently after relay change
     g_state.ramp_ms = 0;
-    g_state.pre_ms = 0;
-    g_state.phase = PH_PRECHARGE;
+    g_state.pre_ms  = 0;
+    g_state.phase   = PH_PRECHARGE;
     pwm_disable();
   }
 

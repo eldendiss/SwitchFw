@@ -26,7 +26,7 @@ static volatile uint8_t g_range_req_code = 0;
 static volatile uint8_t g_cmd_pending = 0;
 static volatile uint8_t g_cmd_code = I2C_CMD_NONE;
 
-static volatile uint8_t g_range_src = RANGE_SRC_AUTO; // default AUTO
+static volatile uint8_t g_range_src = RANGE_SRC_I2C; // range is I2C-only; HW pins repurposed
 
 uint8_t i2c_get_range_src() { return g_range_src; }
 void i2c_set_range_src(uint8_t src)

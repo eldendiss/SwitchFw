@@ -52,11 +52,11 @@ typedef enum : uint8_t
     I2C_CMD_RESET_CTRL = 2
 } i2c_cmd_t;
 
-/** Who controls the active range. */
+/** Who controls the active range. HW pins are repurposed; RANGE_SRC_HW behaves like I2C. */
 typedef enum : uint8_t {
-  RANGE_SRC_HW   = 0,  //!< Follow hardware pins only
-  RANGE_SRC_I2C  = 1,  //!< Follow I²C only
-  RANGE_SRC_AUTO = 2   //!< HW at boot; switch to I²C after first I²C request; optional timeout to fall back
+  RANGE_SRC_HW   = 0,  //!< (legacy) HW pins removed; treated as I²C
+  RANGE_SRC_I2C  = 1,  //!< Follow I²C register 0x20 (default)
+  RANGE_SRC_AUTO = 2   //!< (legacy) same as I²C
 } range_src_t;
 
 /** R/W register (0x21) to select who controls the range. */

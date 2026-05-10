@@ -43,6 +43,20 @@ uint8_t comp_oc_fault(); // momentary OC
 uint8_t comp_oc_pulse_sticky(); // NEW: one-shot sticky, cleared by reader
 
 /**
+ * \brief Silence Timer1 ISRs and disarm comparator (call when supply is disabled).
+ * \details Stops TOIE1/OCIE1B interrupts and clears ACIE. Safe to call every loop
+ *          iteration — idempotent register writes.
+ */
+void comp_suspend();
+
+/**
+ * \brief Re-enable Timer1 ISRs and schedule immediate comparator re-arm.
+ * \param now_us Current monotonic time in microseconds.
+ * \details Call once per iteration on the active (EN high) path. No-op if already armed.
+ */
+void comp_resume(uint32_t now_us);
+
+/**
  * \brief Allows PWM output to be re-enabled after an OC event at next period start.
  * \details Set to 1 to allow switching after OC; set to 0 to keep PWM disabled.
  */

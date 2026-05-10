@@ -22,8 +22,7 @@
  * - 2: WAIT_STABLE (blank + |dFB/dt| below threshold)
  * - 3: MAKE (close requested range)
  *
- * \note Input range code is read from \c RANGE0/RANGE1 (active-low) via \c range_code_read().
- * \note R_SW outputs drive the divider legs; mapping is in \c rsw_make().
+ * \note Range is selected via I²C register 0x20. R_SW outputs drive the divider legs; mapping is in \c rsw_make().
  */
 
 /** \brief Open interval after breaking the range (µs). */
@@ -49,22 +48,14 @@ bool range_is_busy() { return busy; }
 /**
  * \brief Initialize range I/O and apply the current range.
  * \details
- * - Configures \c RANGE0/RANGE1 inputs with pull-ups.
  * - Sets R_SW pins as outputs.
  * - Re-applies \c cur_code to the R_SW network.
  */
 void range_init()
 {
-  range_inputs_init();
   rsw_init();
   rsw_make(cur_code);
 }
-
-/**
- * \brief Read current external range-select inputs (active-low).
- * \return Code 0..3 derived from RANGE1:RANGE0.
- */
-uint8_t range_get_input_code() { return range_code_read(); }
 
 /**
  * @brief report current made range

@@ -89,3 +89,18 @@ uint16_t adc_fb_decim()
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = fb_decim; }
   return v;
 }
+
+void adc_stop()
+{
+  ADCSRA &= ~_BV(ADEN);
+}
+
+void adc_start()
+{
+  if (ADCSRA & _BV(ADEN))
+    return;
+  acc8 = 0;
+  cnt8 = 0;
+  ADCSRA = _BV(ADEN) | _BV(ADATE) | _BV(ADIE) | _adps_bits();
+  ADCSRA |= _BV(ADSC);
+}

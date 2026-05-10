@@ -85,12 +85,16 @@ Defined services (later will be extended further):
 - Properties: Read + Notify
 - Permissions: R
 - Data: 8 byte array
-    - ```device_status```
-    - ```wifi_status```
-    - ```mqtt_status```
-    - ```err_code```
-    - ```wifi_rssi```
-    - ```reserved[3]```
+
+| Byte | Field | Values |
+|------|-------|--------|
+| 0 | `device_status` | `0` IDLE, `1` APPLYING, `2` PROVISIONED, `3` ERROR |
+| 1 | `wifi_status` | `0` DISCONNECTED, `1` CONNECTING, `2` CONNECTED, `3` FAILED |
+| 2 | `mqtt_status` | `0` DISCONNECTED, `1` CONNECTING, `2` CONNECTED, `3` FAILED |
+| 3 | `err_code` | `0` NONE, `1` VALIDATION, `2` WIFI_AUTH, `3` WIFI_TIMEOUT, `4` MQTT_FAILED, `5` STORAGE |
+| 4 | `wifi_rssi` | signed dBm, `0` if not on WiFi |
+| 5 | `eth_status` | `0` DISCONNECTED, `1` CONNECTED |
+| 6–7 | `reserved[2]` | — |
 
 ---
 ### Configuration Service

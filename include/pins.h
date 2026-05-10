@@ -14,8 +14,7 @@
  * \note All pin macros below are **bit numbers** (e.g., \c PD4 == 4) to be used with
  * DDRx/PORTx/PINx and \c _BV(). They are **not** Arduino digital pin IDs.
  *
- * \warning \c STATUS0 and \c STATUS1 are set to PD4/PD5, which overlap with \c RANGE0/\c RANGE1.
- * If both are intended, reassign to avoid contention.
+ * PD4 and PD5 are free — connected to ESP32 for future use (no pull-ups configured).
  */
 
 // --- User pin assignments (bits, not Arduino numbers) ---
@@ -25,22 +24,12 @@
 /** \brief Feedback input (bit index on PORTC). Typically analog/ADC node. */
 #define FB_IN PC0
 
-/** \brief Status line 0 on PORTD.
- *  \warning Overlaps with \c RANGE0 (PD4). */
-#define STATUS0 PD4
-/** \brief Status line 1 on PORTD.
- *  \warning Overlaps with \c RANGE1 (PD5). */
-#define STATUS1 PD5
-
 /** \brief Over-current / analog comparator input (AIN0) on PORTD. */
 #define OC_IN PD6 // AIN0 (comparator input)
 /** \brief External enable input on PORTD (see EN helpers below). */
 #define EN_IN PD3
 
-/** \brief Range select input bit 0 (active-low) on PORTD with pull-up. */
-#define RANGE0 PD4
-/** \brief Range select input bit 1 (active-low) on PORTD with pull-up. */
-#define RANGE1 PD5
+// PD4 and PD5 are free — connected directly to ESP32 for future use.
 
 /** \brief Green OK LED on PORTC bit 2. */
 #define LED_OK PC2
@@ -120,31 +109,6 @@ static inline void EN_init_input()
  * \note EN is active-high, \c false means "disabled".
  */
 static inline bool EN_is_active() { return (PIND & _BV(PD3)) != 0; }
-
-// -----------------------------------------------------------------------------
-// Range inputs (1-of-4) on PD4/PD5 with pull-ups (active-low)
-// -----------------------------------------------------------------------------
-
-/**
- * \brief Configure PD4 and PD5 as inputs with internal pull-ups for range code.
- */
-static inline void range_inputs_init()
-{
-  DDRD &= ~(_BV8(RANGE0) | _BV8(RANGE1));
-  PORTD |= (_BV8(RANGE0) | _BV8(RANGE1)); // pull-ups
-}
-
-/**
- * \brief Read the 2-bit range code (active-low).
- * \return Value 0..3 computed as \c (!PD5)<<1 | (!PD4).
- * \note Because of pull-ups, a grounded/low pin reads as 0; inversion yields the code.
- */
-static inline uint8_t range_code_read()
-{ // 0..3
-  uint8_t r0 = (PIND & _BV8(RANGE0)) ? 1 : 0;
-  uint8_t r1 = (PIND & _BV8(RANGE1)) ? 1 : 0;
-  return (uint8_t)((!r1) << 1 | (!r0)); // active-low to code
-}
 
 // -----------------------------------------------------------------------------
 // Resistor-divider switches (outputs)

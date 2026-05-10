@@ -18,4 +18,10 @@ void adc_init();
  * \return Decimated ADC counts (0..1023).
  * \note Atomic read of an ISR-updated value.
  */
-uint16_t adc_fb_decim(); // returns decimated ADC counts (0..1023)
+uint16_t adc_fb_decim();
+
+/** \brief Stop free-running ADC (power save when supply disabled). */
+void adc_stop();
+
+/** \brief Restart free-running ADC if not already running. */
+void adc_start();
