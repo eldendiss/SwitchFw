@@ -129,6 +129,12 @@ esp_err_t wifi_init(void)
         return err;
     }
 
+    // Keep WiFi config in RAM only. Without this, esp_wifi_set_config() writes
+    // to NVS on every call — the supervisor fires it every 2 s during reconnects,
+    // which fills NVS pages rapidly and triggers compaction. Power loss during
+    // compaction corrupts the partition. We manage persistence ourselves.
+    esp_wifi_set_storage(WIFI_STORAGE_RAM);
+
     err = esp_wifi_set_mode(WIFI_MODE_STA);
     if (err != ESP_OK)
     {
@@ -162,6 +168,7 @@ esp_err_t wifi_init(void)
     if (err == ESP_OK)
     {
         s_inited = true;
+        esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
     }
     return err;
 }

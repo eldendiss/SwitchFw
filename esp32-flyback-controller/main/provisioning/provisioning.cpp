@@ -18,8 +18,12 @@
 #define TAG "prov_mgr"
 
 #define WIFI_TRY_MS         15000
-#define MQTT_TRY_MS         8000
-#define SUPERVISOR_LOOP_MS  2000
+#define MQTT_TRY_MS          8000
+#define SUPERVISOR_LOOP_MS   2000
+
+// Worst case for apply_task wait: a concurrent maintain attempt blocks the supervisor
+// (up to WIFI+MQTT), then the Apply test itself runs (WIFI+MQTT). Cover both back-to-back.
+#define APPLY_TIMEOUT_MS  (2 * (WIFI_TRY_MS + MQTT_TRY_MS) + 5000)
 
 // =======================
 // Status handling
@@ -269,13 +273,15 @@ static void supervisor_task(void *arg)
 
     for (;;)
     {
-        // 1) Handle Apply/Test requests (non-blocking poll)
+        // Block until a request arrives OR the maintain interval expires.
+        // Using xQueueReceive as the sleep primitive lets FreeRTOS tickless idle
+        // (automatic light sleep) keep the CPU off for the full 2 s window instead
+        // of spinning. An Apply command wakes the supervisor immediately.
         sup_req_t req;
-        while (xQueueReceive(s_sup_req_q, &req, 0) == pdTRUE)
+        if (xQueueReceive(s_sup_req_q, &req, pdMS_TO_TICKS(SUPERVISOR_LOOP_MS)) == pdTRUE)
         {
             if (req.type == REQ_TEST_CANDIDATE)
             {
-                /* Block the maintain branch until we're done. */
                 s_test_in_progress = true;
 
                 provisioning_data_t old;
@@ -288,19 +294,12 @@ static void supervisor_task(void *arg)
                 if (!ok)
                 {
                     ESP_LOGI(TAG, "Candidate failed (err=%d), reverting to previous active config", cand_err);
-                    /* Best-effort revert. We don't surface the revert's outcome to the requester;
-                     * the maintain branch will keep trying anyway. */
                     prov_err_t revert_err = ERR_NONE;
                     (void)supervisor_connect_with(&old, true, &revert_err);
                 }
 
-                /* Always notify the requester (success or failure) so apply_task
-                 * doesn't need to wait the full timeout on failure. */
                 if (req.requester)
                 {
-                    /* Stash result on a small static slot keyed by requester.
-                     * Simpler approach: piggyback through queue is overkill;
-                     * we use a notify value to encode ok/err. */
                     uint32_t notify_val = ok
                         ? (uint32_t)1
                         : (uint32_t)(0x80000000u | (uint32_t)cand_err);
@@ -311,7 +310,7 @@ static void supervisor_task(void *arg)
             }
         }
 
-        // 2) Background maintain — but never while a test is in progress.
+        // Background maintain — runs every iteration (after request or after timeout).
         if (!s_test_in_progress)
         {
             provisioning_data_t cfg;
@@ -319,7 +318,6 @@ static void supervisor_task(void *arg)
             cfg = s_active;
             xSemaphoreGive(s_active_lock);
 
-            /* Only maintain if we have something usable to maintain. */
             if (cfg.ssid[0] != '\0')
             {
                 bool net_ok    = net_is_connected_now();
@@ -338,8 +336,6 @@ static void supervisor_task(void *arg)
                 }
             }
         }
-
-        vTaskDelay(pdMS_TO_TICKS(SUPERVISOR_LOOP_MS));
     }
 }
 
@@ -504,7 +500,7 @@ static void apply_task(void *param)
     /* Wait long enough to cover supervisor poll latency + Wi-Fi try + MQTT try + slack */
     uint32_t notify_val = 0;
     BaseType_t got = xTaskNotifyWait(0, ULONG_MAX, &notify_val,
-                                     pdMS_TO_TICKS(SUPERVISOR_LOOP_MS + WIFI_TRY_MS + MQTT_TRY_MS + 5000));
+                                     pdMS_TO_TICKS(APPLY_TIMEOUT_MS));
 
     if (got != pdTRUE)
     {

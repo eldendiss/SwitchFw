@@ -33,6 +33,7 @@ esp_err_t storage_init(void)
 {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_LOGW("storage", "nvs partition corrupted, erasing");
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
@@ -111,7 +112,6 @@ esp_err_t storage_save_device_config_data(device_config_data_t* data)
 {
     nvs_handle_t handle;
 
-    //calculate crc32
     uint32_t crc = calculate_crc32(data, sizeof(device_config_data_t) - sizeof(uint32_t));
     data->crc32 = crc;
 
@@ -142,7 +142,6 @@ esp_err_t storage_load_device_config_data(device_config_data_t* data)
 
     nvs_close(handle);
 
-    //verify crc32
     if (err == ESP_OK) {
         if (!verify_crc32(data, sizeof(device_config_data_t) - sizeof(uint32_t), data->crc32)) {
             ESP_LOGE("storage", "Device config data CRC32 mismatch");

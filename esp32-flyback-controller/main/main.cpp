@@ -3,6 +3,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_pm.h"
 #include "flyback_psu.h"
 #include "esp_timer.h"
 #include "geiger_counter.h"
@@ -32,7 +33,7 @@ device_config_data_t devCfg;
 
 static void avg_u(void *p)
 {
-  const TickType_t period = pdMS_TO_TICKS(500); // 2 Hz sampling
+  const TickType_t period = pdMS_TO_TICKS(1000); // 1 Hz sampling
   TickType_t last = xTaskGetTickCount();
 
   while (true)
@@ -75,6 +76,20 @@ extern "C" void app_main(void)
   ESP_LOGI(TAG, "Boot...");
   // initialize storage
   storage_init();
+
+  // Enable automatic light sleep. The PM framework sleeps the CPU whenever
+  // all tasks are blocked, waking on any interrupt (WiFi RX, timers, GPIO).
+  // WiFi stays connected — the radio wakes for DTIM beacons transparently.
+  // min_freq_mhz=80 is the lowest stable frequency with WiFi+BLE active on ESP32.
+  esp_pm_config_t pm_cfg = {
+      .max_freq_mhz       = 240,
+      .min_freq_mhz       = 80,
+      .light_sleep_enable = true,
+  };
+  if (esp_pm_configure(&pm_cfg) != ESP_OK)
+  {
+      ESP_LOGW(TAG, "esp_pm_configure failed — light sleep not active");
+  }
 
   // Crash-loop detection: count consecutive panics/WDT resets via RTC memory.
   // RTC memory survives software resets but clears on power loss.
