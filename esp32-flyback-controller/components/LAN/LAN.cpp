@@ -219,7 +219,11 @@ void got_ip_event_handler(void *arg, esp_event_base_t event_base,
     char hostname[32];
     snprintf(hostname, sizeof(hostname), "RaSens-%02X%02X%02X", mac[3], mac[4], mac[5]);
     ESP_LOGI(TAG, "Setting mDNS hostname %s.local", hostname);
-    ESP_ERROR_CHECK(mdns_init());
+    static bool s_mdns_initialized = false;
+    if (!s_mdns_initialized) {
+        ESP_ERROR_CHECK(mdns_init());
+        s_mdns_initialized = true;
+    }
     mdns_hostname_set(hostname);
     mdns_instance_name_set(hostname);
 
