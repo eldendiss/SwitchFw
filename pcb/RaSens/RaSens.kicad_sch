@@ -5,9 +5,9 @@
 	(uuid "5a813425-ce65-4d1a-8158-1ddcc9c68fab")
 	(paper "A4")
 	(title_block
-		(title "Geiger Counter Module")
-		(date "2025-09-16")
-		(rev "A")
+		(title "RaSens Pro")
+		(date "2026-05-17")
+		(rev "v5")
 	)
 	(lib_symbols
 		(symbol "20250303:GA3460-BL"

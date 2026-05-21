@@ -5,9 +5,9 @@
 	(uuid "76708abc-7044-4181-a9f0-b7c193c53baa")
 	(paper "A4")
 	(title_block
-		(title "Geiger Counter Module")
-		(date "2025-09-16")
-		(rev "A")
+		(title "RaSensLite")
+		(date "2026-05-17")
+		(rev "v5")
 	)
 	(lib_symbols
 		(symbol "Amplifier_Operational:LM321"

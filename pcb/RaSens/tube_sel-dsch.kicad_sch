@@ -5,7 +5,9 @@
 	(uuid "2b4c13f4-7347-45bb-acb0-b839c49e157f")
 	(paper "A4")
 	(title_block
-		(date "2025-09-16")
+		(title "RaSens Pro")
+		(date "2026-05-17")
+		(rev "v5")
 	)
 	(lib_symbols
 		(symbol "Connector:Screw_Terminal_01x04"

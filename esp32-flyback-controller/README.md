@@ -1,214 +1,216 @@
-# Flyback PSU & Geiger Counter ESP-IDF Driver
+# RaSens — ESP32 Radiation Sensor Firmware
 
-ESP-IDF drivers for:
-- an **AVR flyback HV PSU** (I²C, 4 ranges, status/commands), and
-- a **Geiger pulse counter** using the ESP32 RMT RX peripheral.
+ESP-IDF firmware for a field-deployed radiation sensor based on a Geiger-Müller tube.
+Drives a 4-range flyback HV PSU, counts tube pulses, and streams telemetry over MQTT via Wi-Fi or Ethernet.
 
-Works on ESP-IDF v5+.
+**ESP-IDF v5.4.1 · ESP32 · 8 MB flash**
 
-## Overview
+---
 
-- **Flyback PSU driver (`flyback_psu`)**: Configure per-range setpoints/OV thresholds, select ranges (HW/I²C/AUTO), read 8-byte status, and issue SAVE/RESET commands. Counts↔volts helpers included.
-- **Geiger counter driver (`geiger_counter`**: Counts tube pulses with RMT RX. Filters glitches by minimum pulse width. Provides **CPS, CPM (rolling 60 s)**, and **total**. Thread-safe getters.
-- **Example application (`main`)**: Demonstrates how to initialize and use both drivers together, cycling through PSU voltage ranges and logging Geiger counts.
+## Hardware
+
+| Signal | GPIO (sdkconfig) |
+|---|---|
+| I²C SDA (flyback PSU) | 21 |
+| I²C SCL (flyback PSU) | 22 |
+| PSU enable | 15 |
+| PSU sleep | 16 |
+| Geiger pulse input | 17 |
+| Battery ADC (ADC1_CH5) | 33 |
+
+- **Flyback HV PSU**: AVR-based I²C board at address 0x2A, 4 switchable HV ranges, mechanical relay per range.
+- **Geiger tube**: Pulse output connected to GPIO17. PCNT peripheral counts pulses; glitch filter ≥ 500 ns.
+- **Ethernet**: W5500 SPI module for wired connectivity (runs alongside Wi-Fi).
+- **Battery**: Resistor divider (R1=100 kΩ, R2=22 kΩ) on GPIO33. Supports up to ~12.6 V packs.
 
 ---
 
 ## Features
 
-### Flyback PSU
-
-- I²C master init/reuse, configurable clock.
-- Range source control: HW / I²C / AUTO.
-- Program per-range set, OV trip, OV clear (counts or volts).
-- Read compact STATUS: run_state, fault_code, fb_counts, dcounts, active_range, busy.
-- SAVE_CONFIG, RESET_CTRL commands.
-- Helpers: volts↔counts, set profiles, wait-until-idle.
-
-### Geiger Counter
-
-- RMT RX capture with **min pulse width** filter (ns).
-- Configurable **active level** (high/low), **resolution** (Hz), buffer size.
-- Thread-safe **get_total(), get_cps(), get_cpm()**.
-- Internal task processes RX buffers (zero-copy on symbols).
+- **4-range HV control** — configurable setpoints and ±10 %/±5 % OV trip/clear thresholds per range.
+- **MQTT telemetry** — publishes radiation and system metrics at a configurable interval.
+- **BLE provisioning** — configure Wi-Fi credentials and MQTT server over Bluetooth without USB access.
+- **Dual network** — Wi-Fi STA + W5500 Ethernet; either can carry MQTT. Telemetry reports active interface.
+- **OTA updates** — HTTPS pull from backend server; dual OTA partitions with automatic rollback on crash.
+- **Job commands** — MQTT-delivered commands to change HV range, voltage, conversion factor, interval, and more.
+- **Power management** — automatic light sleep (CPU 80–240 MHz), Wi-Fi modem sleep (DTIM), Wi-Fi config kept in RAM only.
+- **Crash loop protection** — RTC crash counter; after 5 consecutive panics marks firmware valid to break rollback purgatory.
+- **Task watchdog** — 30 s TWDT with panic; catches hung tasks.
 
 ---
 
-## Hardware Requirements
+## Partition Table
 
-- ESP32/ESP32-Sx/Cx with ESP-IDF v5+
-- I²C wiring to AVR PSU at 0x2A (pull-ups required)
-- Tube pulse output routed to an ESP32 GPIO
-- CMake build (component-based)
+| Name | Type | Offset | Size |
+|---|---|---|---|
+| nvs | NVS | 0x9000 | 16 KB |
+| otadata | OTA data | 0xd000 | 8 KB |
+| phy_init | RF data | 0xf000 | 4 KB |
+| ota_0 | App | 0x10000 | 2 MB |
+| ota_1 | App | 0x210000 | 2 MB |
+
+> **Do not change the partition table on deployed devices.** OTA flashes app partitions only; the partition table itself requires a full re-flash.
 
 ---
 
 ## Getting Started
 
-### 1. Clone and Setup ESP-IDF
+### Prerequisites
 
-Follow the official ESP-IDF setup guide:
+- ESP-IDF v5.4.1
+- `idf.py` toolchain
 
-[ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/)
+### Build and flash
 
-### 2. Add Flyback PSU and Geiger Counter Drivers
+```sh
+idf.py menuconfig   # set RaSens options (Wi-Fi defaults, MQTT host, pins, etc.)
+idf.py build
+idf.py flash monitor
+```
 
-Include the provided driver source files (`flyback_psu.h/c`, `geiger_counter.h/c`) in your project.
+### Menuconfig options (`RaSens` menu)
 
-### 3. Example Application
-
-The example demonstrates:
-
-- Initializing the flyback PSU over I²C.
-- Setting voltage setpoints and overvoltage thresholds.
-- Forcing I²C control of the active voltage range.
-- Initializing the Geiger counter on a GPIO pin.
-- Cycling through the four voltage ranges, holding each for 60 seconds.
-- Logging PSU status and Geiger counts every second.
+| Option | Default | Description |
+|---|---|---|
+| `RASENS_DEFAULT_SSID` | `your_ssid` | Fallback Wi-Fi SSID (used when no BLE provisioning data exists) |
+| `RASENS_DEFAULT_WIFI_PASSWORD` | `your_password` | Fallback Wi-Fi password |
+| `RASENS_MQTT_HOST` | `isdg.fei.stuba.sk` | MQTT broker hostname |
+| `RASENS_MQTT_PORT` | `1883` | MQTT broker port |
+| `RASENS_ACCESS_TOKEN` | _(empty)_ | Device access token |
+| `RASENS_HTTP_BACKEND_URL` | `https://…/backend/` | OTA/version backend URL |
+| `RASENS_SDA_PIN` | `22` | I²C SDA |
+| `RASENS_SCL_PIN` | `21` | I²C SCL |
+| `RASENS_ENABLE_PIN` | `17` | PSU enable GPIO |
+| `RASENS_SLEEP_PIN` | `18` | PSU sleep GPIO |
+| `RASENS_INTERRUPT_PIN` | `4` | Geiger pulse GPIO |
+| `RASENS_I2C_ADDRESS` | `42` | PSU I²C address (0x2A) |
 
 ---
 
-## API Usage
+## Provisioning (BLE)
 
-### Flyback PSU
+On first boot (or after factory reset) the device advertises over BLE. Use the companion app or a BLE terminal to write provisioning data and issue control commands.
 
-#### Initialization
+### Control characteristic commands (write 1 byte)
 
-```c
-flyback_psu_t psu;
-ESP_ERROR_CHECK(flyback_psu_init(&psu, I2C_NUM_0, SDA_GPIO, SCL_GPIO, 10000 /* 10 kHz */, 0x2A));
-flyback_psu_set_fullscale(&psu, 1077.5f); // 1023 counts == 1077.5 V
-```
+| Value | Command | Description |
+|---|---|---|
+| `0x01` | Apply | Validate credentials, test Wi-Fi + MQTT, save to NVS on success |
+| `0x02` | Clear | Erase NVS provisioning data, revert to menuconfig defaults |
+| `0x03` | Save Only | Validate and save, skip connection test |
 
-#### Set Range Source to I²C
+### Status characteristic (notify / read, 8 bytes)
 
-```c
-ESP_ERROR_CHECK(flyback_psu_set_range_source(&psu,  FLYBACK_RANGE_SRC_I2C));
-```
+| Byte | Field | Values |
+|---|---|---|
+| 0 | `device_status` | 0=Idle, 1=Applying, 2=Provisioned, 3=Error |
+| 1 | `wifi_status` | 0=Disconnected, 1=Connecting, 2=Connected, 3=Failed |
+| 2 | `mqtt_status` | 0=Disconnected, 1=Connecting, 2=Connected, 3=Failed |
+| 3 | `err_code` | 0=None, 1=Validation, 2=WiFi auth, 3=WiFi timeout, 4=MQTT failed, 5=Storage |
+| 4 | `wifi_rssi` | Signed dBm (0 if unknown) |
+| 5 | `eth_status` | 0=Disconnected, 1=Connected |
+| 6–7 | reserved | — |
 
-#### Set Voltage Setpoints (volts)
+---
 
-```c
-const float V[4] = {200, 500, 700, 900};
-uint16_t C[4];
-for (int i=0;i<4;i++) C[i] = flyback_psu_volts_to_counts(&psu, V[i]);
-ESP_ERROR_CHECK(flyback_psu_set_table_counts4(&psu, C));
+## MQTT Telemetry
 
-// Trip/Clear @ +10% / +5%
-for (int i=0;i<4;i++){
-  ESP_ERROR_CHECK(flyback_psu_set_trip_counts(&psu,  i,
-     flyback_psu_volts_to_counts(&psu, V[i]*1.10f)));
-  ESP_ERROR_CHECK(flyback_psu_set_clear_counts(&psu, i,
-     flyback_psu_volts_to_counts(&psu, V[i]*1.05f)));
-}
-// Optional: ESP_ERROR_CHECK(flyback_psu_send_command(&psu, FLYBACK_CMD_SAVE_CONFIG));
-```
+Published at the configured interval (default 60 s, range 1–3600 s).
 
-#### Start the Geiger counter
-```c
-geiger_counter_t gc = {0};
-ESP_ERROR_CHECK(geiger_counter_start(&gc,
-    GPIO_NUM_4,          // pulse input GPIO
-    true,                // active-high pulses
-    20000000,            // 20 MHz resolution (50 ns tick)
-    1000,                // ≥1 µs min pulse width
-    2048));              // RX symbol buffer
+| Key | Type | Description |
+|---|---|---|
+| `cr60` | float | Counts per minute — 60 s rolling window |
+| `dr60` | float | Dose rate µSv/h — 60 s rolling window |
+| `cr` | float | Counts per interval (short-term rate) |
+| `dr` | float | Dose rate µSv/h (short-term) |
+| `voltage` | float | HV feedback average (V) |
+| `samplerate` | int | Measurement interval (s) |
+| `range` | int | Active HV range (1–4) |
+| `iface` | int | Network interface: 0=none, 1=Wi-Fi, 2=Ethernet |
+| `battery` | float | Battery voltage (V) |
 
-```
+---
 
-#### Select Active Range
+## Job Commands
 
-```c
-ESP_ERROR_CHECK(flyback_psu_select_range(&psu, range_index));
-ESP_ERROR_CHECK(flyback_psu_wait_idle(&psu, 3000, 10)); // wait for relay switch
-```
+Commands arrive over MQTT via the job manager. Each command is a JSON object with a `method` key and optional `params` array.
 
-#### Read Status
+| Method | Params | Description |
+|---|---|---|
+| `setTube` | `[0–3]` | Select HV range (0-indexed). `4` disables HV output. |
+| `setInterval` | `[s]` | Measurement interval in seconds (1–3600) |
+| `setVoltage_r1` | `[V]` | HV setpoint for range 1 |
+| `setVoltage_r2` | `[V]` | HV setpoint for range 2 |
+| `setVoltage_r3` | `[V]` | HV setpoint for range 3 |
+| `setVoltage_r4` | `[V]` | HV setpoint for range 4 |
+| `setConversion_r1` | `[factor]` | µSv/h conversion factor for range 1 |
+| `setConversion_r2` | `[factor]` | µSv/h conversion factor for range 2 |
+| `setConversion_r3` | `[factor]` | µSv/h conversion factor for range 3 |
+| `setConversion_r4` | `[factor]` | µSv/h conversion factor for range 4 |
+| `reset` | — | Restart device (4 s delay) |
+| `factoryReset` | — | Erase all NVS data and restart |
 
-```c
-flyback_psu_status_t status;
-if (flyback_psu_read_status(&psu, &status) == ESP_OK) {
-    float feedback_volts = flyback_psu_counts_to_volts(&psu, status.fb_counts);
-    // Use status fields as needed
-    ESP_LOGI("PSU","st=%u fault=%u fb=%u(%.1fV) d=%d r=%u busy=%u",
-             s.run_state, s.fault_code, s.fb_counts, v, (int)s.dcounts,
-             s.active_range, s.range_busy);
-}
-ESP_LOGI("GEIGER","CPS=%.1f CPM=%.1f Total=%llu",
-           geiger_counter_get_cps(&gc),
-           geiger_counter_get_cpm(&gc),
-           (unsigned long long)geiger_counter_get_total(&gc));
-  vTaskDelay(pdMS_TO_TICKS(1000));
-```
+All settings (voltage, conversion factor, interval, active range) are persisted to NVS immediately after each command.
 
-### Geiger Counter
+---
 
-#### Initialization
-```c
-static geiger_counter_t gc;
-ESP_ERROR_CHECK(geiger_counter_start(&gc, TUBE_GPIO, TUBE_ACTIVE_HIGH, 20000000, 1000, 2048));
-```
+## Device Configuration (NVS)
 
-#### Get Counts
+Stored in the `devcfg` namespace under the `nvs` partition.
 
-```c
-float cps = geiger_counter_get_cps(&gc);   // Counts per second (delta)
-float cpm = geiger_counter_get_cpm(&gc);   // Counts per minute (rolling 60s)
-uint64_t total = geiger_counter_get_total(&gc); // Total counts since start
-```
+| Field | Default | Description |
+|---|---|---|
+| `interval` | 60 s | Telemetry publish interval |
+| `active_range` | 0 | HV range index (0–3) |
+| `set_voltage[4]` | 200, 250, 300, 350 V | HV target per range |
+| `coeff[4]` | 93, 62, 1111, 11111 (×10⁻⁴) | µSv/h conversion factor per range |
 
-#### Stop Counter
-```c
-ESP_ERROR_CHECK(geiger_counter_stop(&gc));
-```
+Config is validated on load: `interval` is clamped to 1–3600 s, `active_range` to 0–3. Corrupt or absent data falls back to defaults and is re-saved.
 
-## Example output
-```
-I (1234) example: Selecting range 0 -> target voltage ~200.0 V (counts=190)
-I (1235) example: PSU status: state=1 fault=0 fb_counts=185 (~198.5 V) dcounts=0 active_range=0 busy=0
-I (1235) GEIGER: Counts: CPS=5.0  CPM=300.0  Total=1500
-...
-```
+---
 
-## Notes & Best Practices
-- **I²C speed:** Start at **10 kHz** (robust on long harnesses). If wiring is short/clean, 100–400 kHz is fine.
-- **Range arbitration:**
-    - `AUTO`: hardware pins control until the first I²C request, then I²C takes over.
-    - If your front panel uses the HW pins, prefer AUTO so remote control can still take over.
-- **STATUS → volts:** `V ≈ fb_counts * (fullscale / 1023.0)`, default fullscale **1077.5 V**.
-- **RMT sizing:**
-    - `resolution_hz = 20 MHz` gives 50 ns ticks; good for 2–5 µs pulses.
-    - `min_pulse_ns`: start with 1000 ns (rejects narrow noise).
-    - `buf_symbols`: 1024–2048 typical; increase if you expect high CPM or bursts.
-- **Threading**:
-    - RMT RX runs a task; getters use a mutex; safe from multiple tasks.
-    - Avoid calling `geiger_counter_stop` from ISR context.
+## Power Management
 
-- The Geiger counter uses a dedicated FreeRTOS task and RMT peripheral; ensure sufficient stack size and priority.
-- Use flyback_psu_send_command() to save configuration to EEPROM or reset the controller if needed.
-- The example cycles through all four voltage ranges, holding each for 60 seconds, printing status and counts every second.
+- **Automatic light sleep** — FreeRTOS tickless idle; CPU sleeps when all tasks blocked.
+- **CPU frequency** — scales dynamically 80–240 MHz.
+- **Wi-Fi modem sleep** — `WIFI_PS_MIN_MODEM`; radio wakes only for DTIM beacons.
+- **Wi-Fi NVS writes suppressed** — `WIFI_STORAGE_RAM` prevents `esp_wifi_set_config()` from writing to flash on every reconnect attempt.
+
+---
+
+## OTA
+
+On each boot (when network is available), the device:
+1. Reports current firmware version to the backend.
+2. Queries the backend for the active firmware version.
+3. Downloads and flashes if versions differ.
+4. Reboots; on success marks the new image valid; on crash rolls back automatically.
+
+---
 
 ## Troubleshooting
-- **I²C timeouts**
-    - Check address `0x2A`, pull-ups, and grounds. Drop bus to **10 kHz** first.
-- **STATUS never idle (`busy=1`)**
-    - Mechanical relays need time; ensure `flyback_psu_wait_idle()` poll interval ≥ 10 ms and timeout ≥ 3 s.
-- **OV faults**
-    - Trip/clear thresholds too tight for the measured divider scaling. Re-measure HV and adjust counts.
-- **Few/no counts**
-    - Pulse polarity mismatch (`active_high`). Increase `min_pulse_ns` if noise, decrease if valid pulses are ~1–2 µs but get filtered.
+
+**Device boots to default voltage instead of saved setpoint**
+The flyback PSU powers on at its own default voltage. The firmware forces a temporary range switch after boot to make the PSU pick up the configured voltage table.
+
+**NVS data lost after battery discharge**
+Fixed in current firmware: `esp_wifi_set_storage(WIFI_STORAGE_RAM)` prevents Wi-Fi reconnect logic from hammering NVS and triggering compaction during power loss.
+
+**Coefficient values look like large integers after firmware update**
+The `coeff` field storage format changed between versions (float → uint32_t ×10000). Issue a `factoryReset` command to clear stale data, then re-apply settings via job commands.
+
+**I²C timeouts to flyback PSU**
+Check SDA/SCL pull-ups and address (0x2A). Bus speed is 10 kHz for stability on long harnesses.
+
+**Relay never settles (`busy=1`)**
+`flyback_wait_for_idle()` uses 10 ms poll, 3 s timeout. If the relay takes longer, check PSU board power supply.
+
+---
 
 ## License
-This project is licensed under a **Non-Commercial License**.  
-- ✅ Free for personal, educational, and research use.  
-- ❌ Commercial use, redistribution for profit, or inclusion in commercial products is prohibited without written permission.  
+
+**Non-Commercial License**
+- Free for personal, educational, and research use.
+- Commercial use, redistribution for profit, or inclusion in commercial products requires written permission.
+
 See [LICENSE](./LICENSE) for details.
-
-## References
-- [ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/)
-- [ESP32 RMT Peripheral](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/rmt.html)
-- AVR flyback PSU firmware documentation
-
-## Notes
-Lite: SDA=21, SCL=22
-Big: SDA=22, SCL=21

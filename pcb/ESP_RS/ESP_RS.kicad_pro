@@ -655,8 +655,20 @@
       "Root"
     ],
     [
-      "fb5fa99f-6989-4a26-ab67-683cbfba9dd4",
+      "99741e68-7554-4418-9ec9-0305272f2377",
       "ETH"
+    ],
+    [
+      "5ccea306-a291-45b1-a442-3c6fd1022e76",
+      "PSU"
+    ],
+    [
+      "2ffa947d-4c44-4326-bd33-33f05b17f0e6",
+      "USB_UART"
+    ],
+    [
+      "0a4e56e2-ebe1-4be6-a1f2-d9763f2d3eb5",
+      "ESP"
     ]
   ],
   "text_variables": {}
