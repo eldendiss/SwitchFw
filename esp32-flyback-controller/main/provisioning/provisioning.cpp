@@ -324,6 +324,26 @@ static void supervisor_task(void *arg)
                 bool mqtt_ok   = iotIs.is_connected();
                 bool mqtt_busy = iotIs.is_connecting();
 
+                // If MQTT stays stuck in "connecting" for too long (e.g. half-open
+                // TCP socket after a WiFi blip), the ESP-IDF internal reconnect may
+                // never fire MQTT_EVENT_CONNECTED. Force a clean restart after 2 min.
+                static uint32_t s_mqtt_stall_iters = 0;
+                if (mqtt_ok || !net_ok)
+                {
+                    s_mqtt_stall_iters = 0;
+                }
+                else if (mqtt_busy)
+                {
+                    s_mqtt_stall_iters++;
+                    if (s_mqtt_stall_iters >= (120000 / SUPERVISOR_LOOP_MS))
+                    {
+                        ESP_LOGW(TAG, "MQTT stuck connecting for ~2 min, forcing restart");
+                        s_mqtt_stall_iters = 0;
+                        iotIs.disconnect();
+                        mqtt_busy = false;
+                    }
+                }
+
                 if (!net_ok)
                 {
                     status_set(DEV_IDLE, WIFI_DISCONNECTED, MQTT_DISCONNECTED, ERR_NONE);
